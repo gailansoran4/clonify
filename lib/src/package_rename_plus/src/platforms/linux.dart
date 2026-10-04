@@ -12,11 +12,13 @@ void _setLinuxConfigurations(dynamic linuxConfig) {
     _setLinuxExecutableName(linuxConfigMap[_executableKey]);
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
-    PackageRenamePlusLogger.error('Skipping Linux configuration!!!');
+    PackageRenamePlusLogger.error('Linux configuration failed.');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
-    PackageRenamePlusLogger.error('Skipping Linux configuration!!!');
+    PackageRenamePlusLogger.error('Linux configuration failed.');
+    rethrow;
   } finally {
     if (linuxConfig != null) {
       PackageRenamePlusLogger.warning(_majorTaskDoneLine);
@@ -74,10 +76,12 @@ void _setLinuxAppName(dynamic appName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('Linux App Name change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('Linux App Name change failed!!!');
+    rethrow;
   } finally {
     if (appName != null) PackageRenamePlusLogger.warning(_minorTaskDoneLine);
   }
@@ -107,10 +111,12 @@ void _setLinuxPackageName(dynamic packageName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('Linux Application ID change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('Linux Application ID change failed!!!');
+    rethrow;
   } finally {
     if (packageName != null) {
       PackageRenamePlusLogger.warning(_minorTaskDoneLine);
@@ -147,10 +153,12 @@ void _setLinuxExecutableName(dynamic exeName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('Linux Executable Name change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('Linux Executable Name change failed!!!');
+    rethrow;
   } finally {
     if (exeName != null) PackageRenamePlusLogger.warning(_minorTaskDoneLine);
   }

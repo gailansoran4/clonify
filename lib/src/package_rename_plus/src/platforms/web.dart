@@ -13,11 +13,13 @@ void _setWebConfigurations(dynamic webConfig) {
     _setPWADescription(webConfigMap[_descriptionKey]);
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
-    PackageRenamePlusLogger.error('Skipping Web configuration!!!');
+    PackageRenamePlusLogger.error('Web configuration failed.');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
-    PackageRenamePlusLogger.error('Skipping Web configuration!!!');
+    PackageRenamePlusLogger.error('Web configuration failed.');
+    rethrow;
   } finally {
     if (webConfig != null) PackageRenamePlusLogger.warning(_majorTaskDoneLine);
   }
@@ -47,10 +49,12 @@ void _setWebTitle(dynamic appName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('Web Title change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('Web Title change failed!!!');
+    rethrow;
   } finally {
     if (appName != null) PackageRenamePlusLogger.warning(_minorTaskDoneLine);
   }
@@ -89,10 +93,12 @@ void _setPWAAppName(dynamic appName, dynamic shortAppName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('PWA Name/Short Name change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('PWA Name/Short Name change failed!!!');
+    rethrow;
   } finally {
     if (appName != null) PackageRenamePlusLogger.warning(_minorTaskDoneLine);
   }
@@ -123,10 +129,12 @@ void _setWebDescription(dynamic description) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('Web Description change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('Web Description change failed!!!');
+    rethrow;
   } finally {
     if (description != null) {
       PackageRenamePlusLogger.warning(_minorTaskDoneLine);
@@ -160,10 +168,12 @@ void _setPWADescription(dynamic description) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('PWA Description change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('PWA Description change failed!!!');
+    rethrow;
   } finally {
     if (description != null) {
       PackageRenamePlusLogger.warning(_minorTaskDoneLine);

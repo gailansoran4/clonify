@@ -8,6 +8,7 @@ class ConfigureCommandModel {
   bool isDebug = ClonifyCommandFlags.isDebug.defaultsTo;
   bool skipFirebaseConfigure =
       ClonifyCommandFlags.skipFirebaseConfigure.defaultsTo;
+  bool refreshFirebase = ClonifyCommandFlags.refreshFirebase.defaultsTo;
   bool skipShorebirdConfigure =
       ClonifyCommandFlags.skipShorebirdConfigure.defaultsTo;
   bool skipPubUpdate = ClonifyCommandFlags.skipPubUpdate.defaultsTo;
@@ -23,6 +24,9 @@ class ConfigureCommandModel {
     isDebug = argResults.clonifyFlag(ClonifyCommandFlags.isDebug);
     skipFirebaseConfigure = argResults.clonifyFlag(
       ClonifyCommandFlags.skipFirebaseConfigure,
+    );
+    refreshFirebase = argResults.clonifyFlag(
+      ClonifyCommandFlags.refreshFirebase,
     );
     skipShorebirdConfigure = argResults.clonifyFlag(
       ClonifyCommandFlags.skipShorebirdConfigure,

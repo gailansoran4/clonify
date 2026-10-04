@@ -6,7 +6,10 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
+import 'diagnostic_commands.dart';
+import '../utils/configuration_preflight.dart';
+import '../utils/project_lock.dart';
+import '../utils/file_tree_checkpoint.dart';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -65,6 +68,9 @@ class ClonifyCommandRunner extends CommandRunner<void> {
     addCommand(UploadCommand());
     addCommand(ListCommand());
     addCommand(WhichCommand());
+    addCommand(DoctorCommand());
+    addCommand(RecoverCommand());
+    addCommand(FirebaseCommand());
   }
 
   /// Reads the version from clonify's own pubspec.yaml when possible.
@@ -125,19 +131,30 @@ class ClonifyCommandRunner extends CommandRunner<void> {
       return;
     }
 
-    const skipValidation = {ClonifyCommands.init, ClonifyCommands.list};
-    final firstArg = args.isEmpty ? null : args.first;
-    final shouldSkipValidation =
-        firstArg == null ||
+    final command = argResults.command?.name;
+    final help =
         args.contains('--help') ||
         args.contains('-h') ||
-        skipValidation.any((c) => c.name == firstArg);
-
-    if (!shouldSkipValidation && !validatedClonifySettings(isSilent: true)) {
-      throw CustomException('Validation Failed !');
+        command == 'help' ||
+        command == null;
+    final skipValidation =
+        help || ['init', 'list', 'doctor', 'recover'].contains(command);
+    if (!skipValidation && !validatedClonifySettings(isSilent: true)) {
+      throw CustomException(
+        'Fix clonify/clonify_settings.yaml before retrying.',
+      );
     }
-
-    return super.run(args);
+    final dryRun =
+        command == 'configure' && argResults.command?['dry-run'] == true;
+    if (help ||
+        dryRun ||
+        ['list', 'which', 'doctor', 'recover'].contains(command)) {
+      return super.run(args);
+    }
+    return withProjectLock(() async {
+      assertNoPendingRecovery();
+      await super.run(args);
+    });
   }
 }
 
@@ -172,7 +189,7 @@ Future<String> resolveClientIdOrThrow({
     throw CustomException(missingMessage ?? Messages.clientIdRequired);
   }
 
-  if (preferLastWithoutPrompt) return lastClientId;
+  if (preferLastWithoutPrompt || skipAll) return lastClientId;
 
   if (!skipAll) {
     final answer = prompt(Messages.useLastClientIdMessage(lastClientId));
@@ -187,7 +204,8 @@ class InitializeCommand extends ClonifyBaseCommand {
   ClonifyCommands get command => ClonifyCommands.init;
 
   @override
-  Future<void> run() => initClonify();
+  Future<void> run() =>
+      runConfigureTransaction(initClonify, roots: ['clonify']);
 }
 
 class CreateCommand extends ClonifyBaseCommand {
@@ -195,7 +213,7 @@ class CreateCommand extends ClonifyBaseCommand {
   ClonifyCommands get command => ClonifyCommands.create;
 
   @override
-  Future<void> run() => createClone();
+  Future<void> run() => runConfigureTransaction(createClone);
 }
 
 class WhichCommand extends ClonifyBaseCommand {
@@ -215,11 +233,18 @@ abstract class ClientIdCommand extends ClonifyBaseCommand {
 
 class ConfigureCommand extends ClientIdCommand {
   ConfigureCommand() : super(mandatory: false) {
+    argParser.addFlag(
+      'dry-run',
+      negatable: false,
+      help:
+          'Validate locally and show planned steps without changing project files.',
+    );
     argParser.addClonifyFlags(const [
       ClonifyCommandFlags.skipAll,
       ClonifyCommandFlags.autoUpdate,
       ClonifyCommandFlags.isDebug,
       ClonifyCommandFlags.skipFirebaseConfigure,
+      ClonifyCommandFlags.refreshFirebase,
       ClonifyCommandFlags.skipShorebirdConfigure,
       ClonifyCommandFlags.skipPubUpdate,
       ClonifyCommandFlags.skipVersionUpdate,
@@ -236,6 +261,10 @@ class ConfigureCommand extends ClientIdCommand {
       provided: model.clientId,
       skipAll: model.skipAll,
     );
+    if (argResults?['dry-run'] == true) {
+      printConfigurePlan(inspectConfigure(model), model.clientId!);
+      return;
+    }
     await configureApp(model);
   }
 }
@@ -273,20 +302,16 @@ class ShorebirdCommand extends ClientIdCommand {
       );
     }
 
-    if (!clonifySettings.shorebirdEnabled) {
+    if (!currentClonifySettings().shorebirdEnabled) {
       throw CustomException(
         'Shorebird is disabled. Set shorebird.enabled: true in '
         'clonify/clonify_settings.yaml',
       );
     }
 
+    assertToolAvailable('shorebird');
     final configFile = File(Constants.configFilePath(clientId));
-    if (!configFile.existsSync()) {
-      throw CustomException('Clone config not found: ${configFile.path}');
-    }
-
-    final configJson =
-        jsonDecode(configFile.readAsStringSync()) as Map<String, dynamic>;
+    final configJson = readCloneProfile(clientId);
     final packageName = (configJson['packageName'] as String?)?.trim() ?? '';
     final shorebirdAppId = resolveShorebirdAppId(configJson);
 
@@ -308,19 +333,25 @@ class ShorebirdCommand extends ClientIdCommand {
         ..skipAll = true
         ..skipFirebaseConfigure = skipFirebase
         ..skipShorebirdConfigure = false,
+      afterConfigure: () async {
+        assertBundleIdMatches(
+          shorebirdArgs: shorebirdArgs,
+          expectedPackageName: packageName,
+        );
+        assertShorebirdAppIdMatches(shorebirdAppId);
+        logger.i(
+          'Running Shorebird (app_id=$shorebirdAppId, package=$packageName, clientId=$clientId)',
+        );
+        try {
+          await execShorebird(shorebirdArgs);
+        } catch (_) {
+          logger.w(
+            'Shorebird may have published remotely. Check its release status before retrying; local recovery cannot undo a published release or patch.',
+          );
+          rethrow;
+        }
+      },
     );
-
-    assertBundleIdMatches(
-      shorebirdArgs: shorebirdArgs,
-      expectedPackageName: packageName,
-    );
-    assertShorebirdAppIdMatches(shorebirdAppId);
-
-    logger.i(
-      '🐦 Running shorebird ${shorebirdArgs.join(' ')} '
-      '(app_id=$shorebirdAppId, package=$packageName, clientId=$clientId)',
-    );
-    await execShorebird(shorebirdArgs);
   }
 }
 
@@ -363,7 +394,11 @@ class CleanCommand extends ClientIdCommand {
       preferLastWithoutPrompt: true,
     );
     try {
-      await cleanupPartialClone(clientId);
+      assertClientId(clientId);
+      await runConfigureTransaction(
+        () => cleanupPartialClone(clientId),
+        roots: ['clonify/clones/$clientId'],
+      );
     } catch (e) {
       throw CustomException(
         'Failed to clean up the clone for client ID "$clientId": $e',
@@ -374,6 +409,16 @@ class CleanCommand extends ClientIdCommand {
 
 class UploadCommand extends ClientIdCommand {
   UploadCommand() : super(mandatory: false) {
+    argParser.addFlag(
+      'uploadAndroid',
+      defaultsTo: true,
+      help: 'Upload the Android AAB.',
+    );
+    argParser.addFlag(
+      'uploadIOS',
+      defaultsTo: true,
+      help: 'Upload the iOS IPA.',
+    );
     argParser.addClonifyFlags(const [
       ClonifyCommandFlags.skipAll,
       ClonifyCommandFlags.skipAndroidUploadCheck,
@@ -391,20 +436,18 @@ class UploadCommand extends ClientIdCommand {
       provided: results.clientId,
       skipAll: results.clonifyFlag(ClonifyCommandFlags.skipAll),
     );
-    try {
-      await uploadApps(
-        clientId,
-        skipAll: results.clonifyFlag(ClonifyCommandFlags.skipAll),
-        skipAndroidUploadCheck: results.clonifyFlag(
-          ClonifyCommandFlags.skipAndroidUploadCheck,
-        ),
-        skipIOSUploadCheck: results.clonifyFlag(
-          ClonifyCommandFlags.skipIOSUploadCheck,
-        ),
-      );
-    } catch (error) {
-      throw CustomException(Messages.failedToUploadClone(clientId, error));
-    }
+    await uploadApps(
+      clientId,
+      uploadAndroid: results['uploadAndroid'] as bool,
+      uploadIOS: results['uploadIOS'] as bool,
+      skipAll: results.clonifyFlag(ClonifyCommandFlags.skipAll),
+      skipAndroidUploadCheck: results.clonifyFlag(
+        ClonifyCommandFlags.skipAndroidUploadCheck,
+      ),
+      skipIOSUploadCheck: results.clonifyFlag(
+        ClonifyCommandFlags.skipIOSUploadCheck,
+      ),
+    );
   }
 }
 

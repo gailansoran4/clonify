@@ -1,4 +1,5 @@
 import 'color_model.dart';
+import '../custom_exceptions.dart';
 
 /// Represents the complete configuration for a Flutter project clone.
 ///
@@ -19,65 +20,69 @@ import 'color_model.dart';
 /// ```
 class CloneConfigModel {
   /// The display name of the application.
-  String? appName;
+  late final String? appName;
 
   /// Unique identifier for this client configuration.
-  String? clientId;
+  late final String? clientId;
 
   /// The primary color for the app theme in hex format.
-  String? primaryColor;
+  late final String? primaryColor;
 
   /// The Android/iOS package name (e.g., 'com.example.app').
-  String? packageName;
+  late final String? packageName;
 
   /// The launcher icon filename.
-  String? launcherIcon;
+  late final String? launcherIcon;
 
   /// The splash screen filename.
-  String? splashScreen;
+  late final String? splashScreen;
 
   /// The logo filename.
-  String? logo;
+  late final String? logo;
 
   /// Optional Android status-bar notification icon filename under clone assets
   /// (white-on-transparent PNG, default `ic_notification.png`).
-  String? notificationIcon;
+  late final String? notificationIcon;
 
   /// Optional Android notification icon tint / background color
   /// (`0xAARRGGBB` or `#RRGGBB`). Falls back to [primaryColor] when unset.
-  String? backgroundNotificationColor;
+  late final String? backgroundNotificationColor;
 
   /// Optional splash screen background color (`0xAARRGGBB` or `#RRGGBB`).
   /// Falls back to `#FFFFFF` when unset.
-  String? backgroundSplashColor;
+  late final String? backgroundSplashColor;
 
   /// The Firebase project ID.
-  String? firebaseProjectId;
+  late final String? firebaseProjectId;
+
+  /// Credential reference (env:NAME or a path outside the Flutter project).
+  /// This tooling-only value is never generated into the mobile app.
+  late final String? firebaseServiceAccount;
 
   /// The Shorebird app ID used for code-push releases/patches.
-  String? shorebirdAppId;
+  late final String? shorebirdAppId;
 
   /// Optional Transistorsoft Background Geolocation Android JWT license.
-  String? backgroundGeolocationLicenseAndroid;
+  late final String? backgroundGeolocationLicenseAndroid;
 
   /// Optional Transistorsoft Background Geolocation iOS JWT license.
-  String? backgroundGeolocationLicenseIos;
+  late final String? backgroundGeolocationLicenseIos;
 
   /// Optional Android keystore filename under `clonify/clones/{id}/android/`.
-  String? androidKeystore;
+  late final String? androidKeystore;
 
   /// Optional Android `key.properties` filename under the clone android folder.
-  String? androidKeyProperties;
+  late final String? androidKeyProperties;
 
   /// List of additional color configurations for the application.
 
-  List<ColorModel>? colors;
+  late final List<ColorModel>? colors;
 
   /// The base URL for API endpoints.
-  String? baseUrl;
+  late final String? baseUrl;
 
   /// The version string in format 'major.minor.patch+build' (e.g., '1.0.0+1').
-  late String version;
+  late final String version;
 
   /// Validates if the configuration has the minimum required fields.
   ///
@@ -99,31 +104,54 @@ class CloneConfigModel {
   /// };
   /// final config = CloneConfigModel.fromJson(json);
   /// ```
-  CloneConfigModel.fromJson(dynamic json) {
-    clientId = json['clientId'];
-    appName = json['appName'];
-    primaryColor = json['primaryColor'];
-    packageName = json['packageName'];
-    baseUrl = json['baseUrl'];
-    version = json['version'] ?? '1.0.0+1';
-    launcherIcon = json['launcherIcon'];
-    splashScreen = json['splashScreen'];
-    logo = json['logo'];
-    notificationIcon = json['notificationIcon'];
-    backgroundNotificationColor = json['backgroundNotificationColor'];
-    backgroundSplashColor = json['backgroundSplashColor'];
-    firebaseProjectId = json['firebaseProjectId'];
-    shorebirdAppId = json['shorebirdAppId'];
-    backgroundGeolocationLicenseAndroid =
-        json['backgroundGeolocationLicenseAndroid'];
-    backgroundGeolocationLicenseIos = json['backgroundGeolocationLicenseIos'];
-    androidKeystore = json['androidKeystore'];
-    androidKeyProperties = json['androidKeyProperties'];
-    if (json['colors'] != null) {
-      colors = [];
-      json['colors'].forEach((v) {
-        colors?.add(ColorModel.fromJson(v));
-      });
+  CloneConfigModel.fromJson(Object? source) {
+    if (source is! Map<String, dynamic>) {
+      throw CustomException('Clone configuration must be a JSON object.');
     }
+    String? text(String field) {
+      final value = source[field];
+      if (value != null && value is! String) {
+        throw CustomException('Clone field "$field" must be a string.');
+      }
+      return value as String?;
+    }
+
+    clientId = text('clientId');
+    appName = text('appName');
+    primaryColor = text('primaryColor');
+    packageName = text('packageName');
+    baseUrl = text('baseUrl');
+    version = text('version') ?? '1.0.0+1';
+    launcherIcon = text('launcherIcon');
+    splashScreen = text('splashScreen');
+    logo = text('logo');
+    notificationIcon = text('notificationIcon');
+    backgroundNotificationColor = text('backgroundNotificationColor');
+    backgroundSplashColor = text('backgroundSplashColor');
+    firebaseProjectId = text('firebaseProjectId');
+    firebaseServiceAccount = text('firebaseServiceAccount');
+    shorebirdAppId = text('shorebirdAppId');
+    backgroundGeolocationLicenseAndroid = text(
+      'backgroundGeolocationLicenseAndroid',
+    );
+    backgroundGeolocationLicenseIos = text('backgroundGeolocationLicenseIos');
+    androidKeystore = text('androidKeystore');
+    androidKeyProperties = text('androidKeyProperties');
+    final rawColors = source['colors'];
+    if (rawColors != null && rawColors is! List) {
+      throw CustomException('Clone field "colors" must be a list.');
+    }
+    colors = rawColors == null
+        ? null
+        : List<ColorModel>.unmodifiable(
+            (rawColors as List).map((value) {
+              if (value is! Map<String, dynamic>) {
+                throw CustomException(
+                  'Each clone color must be a JSON object.',
+                );
+              }
+              return ColorModel.fromJson(value);
+            }),
+          );
   }
 }

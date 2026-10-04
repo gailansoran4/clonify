@@ -16,11 +16,13 @@ void _setAndroidConfigurations(dynamic androidConfig) {
     );
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
-    PackageRenamePlusLogger.error('Skipping Android configuration!!!');
+    PackageRenamePlusLogger.error('Android configuration failed.');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
-    PackageRenamePlusLogger.error('Skipping Android configuration!!!');
+    PackageRenamePlusLogger.error('Android configuration failed.');
+    rethrow;
   } finally {
     if (androidConfig != null) {
       PackageRenamePlusLogger.warning(_majorTaskDoneLine);
@@ -40,8 +42,8 @@ void _setAndroidAppName(dynamic appName) {
 
     final androidManifestString = androidManifestFile.readAsStringSync();
     final newLabelAndroidManifestString = androidManifestString.replaceAll(
-      RegExp('android:label="(.*)"'),
-      'android:label="$appName"',
+      RegExp('android:label="[^"]*"'),
+      'android:label="${_xmlAttribute(appName)}"',
     );
 
     androidManifestFile.writeAsStringSync(newLabelAndroidManifestString);
@@ -52,10 +54,12 @@ void _setAndroidAppName(dynamic appName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('Android Label change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('Android Label change failed!!!');
+    rethrow;
   } finally {
     if (appName != null) PackageRenamePlusLogger.warning(_minorTaskDoneLine);
   }
@@ -85,10 +89,12 @@ void _setAndroidPackageName(dynamic packageName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('Android Package change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('Android Package change failed!!!');
+    rethrow;
   } finally {
     if (packageName != null) PackageRenamePlusLogger.info(_minorTaskDoneLine);
   }
@@ -198,12 +204,21 @@ void _createNewMainActivity({
       default:
         throw _PackageRenameErrors.invalidAndroidLanguageValue;
     }
+    if (overrideOldPackage == packageName) {
+      final existing = File(
+        '$_androidMainDirPath/$lang/${packageName.replaceAll('.', '/')}/MainActivity.$fileExtension',
+      );
+      if (existing.existsSync()) return;
+      throw _PackageRenameErrors.androidOldDirectoryNotFound;
+    }
     if (overrideOldPackage == null) {
       final packageDirs = packageName.replaceAll('.', '/');
       final langDir = '$_androidMainDirPath/$lang';
       final mainActivityFile = File(
         '$langDir/$packageDirs/MainActivity.$fileExtension',
-      )..createSync(recursive: true);
+      );
+      if (mainActivityFile.existsSync()) return;
+      mainActivityFile.createSync(recursive: true);
       var fileContent = lang == 'kotlin'
           ? _androidKotlinMainActivityTemplate
           : _androidJavaMainActivityTemplate;
@@ -239,13 +254,23 @@ void _createNewMainActivity({
       final newMainActivityDir = Directory('$langDir/$newPackageDirs')
         ..createSync(recursive: true);
       for (final element in oldDirContents) {
+        final destination =
+            '$langDir/$newPackageDirs/${element.path.split(Platform.pathSeparator).last}';
+        if (FileSystemEntity.typeSync(destination, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          throw FileSystemException(
+            'Cannot overwrite an existing native source while renaming',
+            destination,
+          );
+        }
         element.renameSync(
           '$langDir/$newPackageDirs/'
           '${element.path.split(Platform.pathSeparator).last}',
         );
       }
       var oldPackageDir = oldMainActivityDir;
-      while (oldPackageDir.listSync().isEmpty) {
+      while (oldPackageDir.path != langDir &&
+          oldPackageDir.listSync().isEmpty) {
         oldPackageDir.deleteSync();
         oldPackageDir = oldPackageDir.parent;
       }
@@ -279,10 +304,12 @@ void _createNewMainActivity({
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('New MainActivity creation failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('New MainActivity creation failed!!!');
+    rethrow;
   } finally {
     if (packageName != null) {
       PackageRenamePlusLogger.warning(_minorTaskDoneLine);

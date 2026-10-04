@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'command_process.dart';
 
 import 'package:clonify/constants.dart';
 import 'package:clonify/custom_exceptions.dart';
@@ -31,9 +32,9 @@ Future<void> configureShorebirdAppId({
 
   final file = File(defaultShorebirdYamlPath);
   if (!file.existsSync()) {
-    logger.e('❌ Shorebird file not found at $defaultShorebirdYamlPath');
-    logger.i('  Run `shorebird init` in the Flutter project root first.');
-    return;
+    throw CustomException(
+      'Shorebird file not found at $defaultShorebirdYamlPath. Run shorebird init first.',
+    );
   }
 
   final content = file.readAsStringSync();
@@ -84,7 +85,7 @@ String? readAndroidApplicationId() {
   if (file == null) return null;
 
   final match = RegExp(
-    r'''applicationId\s*(?:=|:)\s*["']([^"']+)["']''',
+    r'''applicationId\s*(?:=|:)?\s*["']([^"']+)["']''',
   ).firstMatch(file.readAsStringSync());
   return match?.group(1);
 }
@@ -97,7 +98,7 @@ String? readIosBundleId() {
   final match = RegExp(
     r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([^;]+);',
   ).firstMatch(file.readAsStringSync());
-  return match?.group(1)?.trim();
+  return match?.group(1)?.trim().replaceAll('"', '');
 }
 
 /// Ensures the active native bundle id matches [expectedPackageName]
@@ -140,14 +141,5 @@ void assertShorebirdAppIdMatches(String expectedAppId) {
 
 /// Runs the Shorebird CLI with inherited stdio.
 Future<void> execShorebird(List<String> shorebirdArgs) async {
-  final result = await Process.start(
-    'shorebird',
-    shorebirdArgs,
-    mode: ProcessStartMode.inheritStdio,
-    runInShell: true,
-  );
-  final exitCode = await result.exitCode;
-  if (exitCode != 0) {
-    throw CustomException('shorebird exited with code $exitCode');
-  }
+  await executeCommand('shorebird', shorebirdArgs, inheritStdio: true);
 }

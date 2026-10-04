@@ -1,4 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
+
+import '../custom_exceptions.dart';
+import 'command_process.dart';
+import 'project_lock.dart';
+import 'project_paths.dart';
 
 import 'package:clonify/utils/clonify_helpers.dart';
 import 'package:path/path.dart' as p;
@@ -17,6 +23,9 @@ const configureMutableRoots = <String>[
   'lib/firebase_options.dart',
   'shorebird.yaml',
   'pubspec.yaml',
+  'pubspec.lock',
+  'l10n.yaml',
+  '.flutter-plugins-dependencies',
   'package_rename_config.yaml',
   'flutter_launcher_icons.yaml',
   'flutter_native_splash.yaml',
@@ -37,20 +46,25 @@ const checkpointSkipDirectoryNames = <String>{
 
 /// Thrown after a failed configure has restored the previous project files.
 class ConfigureRolledBackException implements Exception {
-  ConfigureRolledBackException(this.cause, {this.restoreError});
+  ConfigureRolledBackException(
+    this.cause, {
+    this.restoreError,
+    this.backupPath,
+  });
 
   final Object cause;
   final Object? restoreError;
+  final String? backupPath;
 
   String get message {
-    if (restoreError == null) return 'Configure failed: $cause';
-    return 'Configure failed: $cause\nAlso failed to restore previous files: $restoreError';
+    if (restoreError == null) return 'Command failed: $cause';
+    return 'Command failed: $cause\nCould not restore all previous files: $restoreError\nBackup retained at $backupPath. Run clonify recover after fixing the filesystem error.';
   }
 
   @override
   String toString() {
     if (restoreError == null) {
-      return '$message\nRestored previous iOS, Android, and project files.';
+      return '$message\nRestored previous project files.';
     }
     return message;
   }
@@ -66,18 +80,38 @@ class FileTreeCheckpoint {
 
   static FileTreeCheckpoint capture([
     Iterable<String> roots = configureMutableRoots,
+    Directory? storage,
   ]) {
-    final backupDir = Directory.systemTemp.createTempSync(
+    final backupDir = (storage ?? Directory.systemTemp).createTempSync(
       'clonify_checkpoint_',
     );
-    final entries = <CheckpointEntry>[
-      for (var index = 0; index < roots.length; index++)
-        _captureRoot(backupDir, roots.elementAt(index), '$index'),
-    ];
-    return FileTreeCheckpoint._(backupDir, entries);
+    try {
+      if (!Platform.isWindows) {
+        final result = Process.runSync('chmod', ['700', backupDir.path]);
+        if (result.exitCode != 0) {
+          throw FileSystemException(
+            'Cannot protect backup directory',
+            backupDir.path,
+          );
+        }
+      }
+      final paths = roots.map(projectAbsolutePath).toSet().toList();
+      paths.removeWhere(
+        (root) =>
+            paths.any((other) => other != root && p.isWithin(other, root)),
+      );
+      final entries = <CheckpointEntry>[
+        for (var index = 0; index < paths.length; index++)
+          _captureRoot(backupDir, paths[index], '$index'),
+      ];
+      return FileTreeCheckpoint._(backupDir, entries);
+    } catch (_) {
+      backupDir.deleteSync(recursive: true);
+      rethrow;
+    }
   }
 
-  void restore() {
+  void restore({bool discardAfterRestore = true}) {
     Object? firstError;
     StackTrace? firstStack;
     for (final entry in entries) {
@@ -88,14 +122,10 @@ class FileTreeCheckpoint {
         firstStack ??= stack;
       }
     }
-    try {
-      discard();
-    } catch (_) {
-      // Backup leftover in temp is safer than aborting a restored project.
-    }
     if (firstError != null) {
       Error.throwWithStackTrace(firstError, firstStack!);
     }
+    if (discardAfterRestore) discard();
   }
 
   void discard() {
@@ -171,23 +201,162 @@ class CheckpointEntry {
   final bool isDirectory;
 }
 
-Future<T> runConfigureTransaction<T>(Future<T> Function() body) async {
-  final checkpoint = FileTreeCheckpoint.capture();
+const recoveryJournalPath = '.dart_tool/clonify/recovery.json';
+
+/// Refuses to overwrite an interrupted operation's recovery record.
+void assertNoPendingRecovery() {
+  if (File(recoveryJournalPath).existsSync()) {
+    throw CustomException(
+      'An unfinished Clonify operation needs recovery. Run clonify recover before another command.',
+    );
+  }
+}
+
+void writeRecoveryJournal(FileTreeCheckpoint checkpoint, String state) {
+  final journal = File(recoveryJournalPath);
+  journal.parent.createSync(recursive: true);
+  final data = {
+    'schema': 1,
+    'project': Directory.current.resolveSymbolicLinksSync(),
+    'state': state,
+    'backup': projectAbsolutePath(checkpoint.backupDir.path),
+    'entries': [
+      for (final entry in checkpoint.entries)
+        {
+          'root': entry.root,
+          'existed': entry.existed,
+          'id': entry.id,
+          'isDirectory': entry.isDirectory,
+        },
+    ],
+  };
+  final staged = File('${journal.path}.tmp');
+  staged.writeAsStringSync(jsonEncode(data), flush: true);
+  staged.renameSync(journal.path);
+}
+
+/// Restores a durable checkpoint after an interrupted process. Committed
+/// operations only need backup cleanup; their successful changes stay applied.
+Future<bool> recoverProject() => withProjectLock(() async {
+  final journal = File(recoveryJournalPath);
+  if (!journal.existsSync()) return false;
+  final Object? data;
   try {
-    final result = await body();
+    data = jsonDecode(journal.readAsStringSync());
+  } on FormatException {
+    throw CustomException(
+      'Invalid recovery JSON at ${journal.path}. Backup retained.',
+    );
+  }
+  final project = Directory.current.resolveSymbolicLinksSync();
+  final storage = p.join(project, '.dart_tool', 'clonify', 'checkpoints');
+  if (data is! Map ||
+      data['schema'] != 1 ||
+      data['project'] != project ||
+      data['backup'] is! String ||
+      !p.isWithin(storage, data['backup'] as String) ||
+      data['entries'] is! List ||
+      !['pending', 'committed'].contains(data['state'])) {
+    throw CustomException(
+      'Invalid recovery journal at ${journal.path}. Backup retained; inspect the journal before retrying.',
+    );
+  }
+  final entries = <CheckpointEntry>[];
+  for (final item in data['entries'] as List) {
+    if (item is! Map ||
+        item['root'] is! String ||
+        !p.isWithin(project, item['root'] as String) ||
+        isProtectedProjectPath(item['root'] as String) ||
+        item['id'] is! String ||
+        !RegExp(r'^\d+$').hasMatch(item['id'] as String) ||
+        item['existed'] is! bool ||
+        item['isDirectory'] is! bool) {
+      throw CustomException('Invalid recovery entry. Backup retained.');
+    }
+    entries.add(
+      CheckpointEntry(
+        root: item['root'] as String,
+        existed: item['existed'] as bool,
+        id: item['id'] as String,
+        isDirectory: item['isDirectory'] as bool,
+      ),
+    );
+  }
+  assertProjectPath(data['backup'] as String);
+  for (final entry in entries) {
+    assertProjectPath(entry.root);
+  }
+  final checkpoint = FileTreeCheckpoint._(
+    Directory(data['backup'] as String),
+    entries,
+  );
+  if (data['state'] == 'committed') {
     checkpoint.discard();
-    return result;
+  } else {
+    checkpoint.restore(discardAfterRestore: false);
+    writeRecoveryJournal(checkpoint, 'committed');
+    checkpoint.discard();
+  }
+  journal.deleteSync();
+  return true;
+});
+
+Future<T> runConfigureTransaction<T>(
+  Future<T> Function() body, {
+  Iterable<String> roots = configureMutableRoots,
+}) => withProjectLock(() async {
+  assertNoPendingRecovery();
+  checkCommandCancellation();
+  final project = Directory.current.resolveSymbolicLinksSync();
+  final paths = roots.where((root) => root.trim().isNotEmpty).toSet();
+  for (final root in paths) {
+    assertProjectPath(root, allowSymlinks: false);
+    final absolute = projectAbsolutePath(root);
+    if (!p.isWithin(project, absolute) || isProtectedProjectPath(absolute)) {
+      throw CustomException(
+        'Cannot snapshot path outside project files: $root',
+      );
+    }
+  }
+  final storage = Directory('.dart_tool/clonify/checkpoints')
+    ..createSync(recursive: true);
+  final checkpoint = FileTreeCheckpoint.capture(paths, storage);
+  try {
+    writeRecoveryJournal(checkpoint, 'pending');
+  } catch (_) {
+    checkpoint.discard();
+    rethrow;
+  }
+  late final T result;
+  try {
+    result = await body();
+    checkCommandCancellation();
+    writeRecoveryJournal(checkpoint, 'committed');
   } catch (error) {
     try {
-      checkpoint.restore();
+      checkpoint.restore(discardAfterRestore: false);
+      writeRecoveryJournal(checkpoint, 'committed');
+      checkpoint.discard();
+      File(recoveryJournalPath).deleteSync();
     } catch (restoreError) {
-      logger.e('❌ Configure failed: $error');
-      logger.e('❌ Also failed to restore previous files: $restoreError');
-      throw ConfigureRolledBackException(error, restoreError: restoreError);
+      throw ConfigureRolledBackException(
+        error,
+        restoreError: restoreError,
+        backupPath: checkpoint.backupDir.absolute.path,
+      );
     }
     throw ConfigureRolledBackException(error);
   }
-}
+  try {
+    checkpoint.discard();
+    File(recoveryJournalPath).deleteSync();
+  } catch (_) {
+    logger.w(
+      'Command succeeded, but backup cleanup needs attention. Run clonify recover to finish cleanup.',
+    );
+  }
+  return result;
+});
 
 void _copyEntity(String sourcePath, String destPath) {
   final type = FileSystemEntity.typeSync(sourcePath, followLinks: false);
@@ -205,7 +374,7 @@ void _copyEntity(String sourcePath, String destPath) {
     Directory(destPath).createSync(recursive: true);
     for (final child in Directory(sourcePath).listSync(followLinks: false)) {
       final name = p.basename(child.path);
-      if (checkpointSkipDirectoryNames.contains(name)) continue;
+      if (_skipCheckpointDirectory(child.path)) continue;
       _copyEntity(child.path, p.join(destPath, name));
     }
     return;
@@ -248,8 +417,8 @@ bool _isMissing(String path) {
       FileSystemEntityType.notFound;
 }
 
-List<(String, Directory)> _parkSkippedDirectories(String root) {
-  final parked = <(String, Directory)>[];
+List<({String relative, Directory hold})> _parkSkippedDirectories(String root) {
+  final parked = <({String relative, Directory hold})>[];
   final type = FileSystemEntity.typeSync(root, followLinks: false);
   if (type != FileSystemEntityType.directory) return parked;
 
@@ -257,11 +426,13 @@ List<(String, Directory)> _parkSkippedDirectories(String root) {
     for (final child in dir.listSync(followLinks: false).toList()) {
       if (child is! Directory) continue;
       final name = p.basename(child.path);
-      if (checkpointSkipDirectoryNames.contains(name)) {
-        final hold = Directory.systemTemp.createTempSync('clonify_park_');
+      if (_skipCheckpointDirectory(child.path)) {
+        final hold = Directory(
+          p.dirname(p.absolute(root)),
+        ).createTempSync('.clonify_park_');
         final moved = p.join(hold.path, name);
         child.renameSync(moved);
-        parked.add((p.relative(child.path, from: root), hold));
+        parked.add((relative: p.relative(child.path, from: root), hold: hold));
       } else {
         walk(child);
       }
@@ -272,10 +443,12 @@ List<(String, Directory)> _parkSkippedDirectories(String root) {
   return parked;
 }
 
-void _unparkSkippedDirectories(String root, List<(String, Directory)> parked) {
+void _unparkSkippedDirectories(
+  String root,
+  List<({String relative, Directory hold})> parked,
+) {
   for (final item in parked) {
-    final relative = item.$1;
-    final hold = item.$2;
+    final (:relative, :hold) = item;
     final name = p.basename(relative);
     final source = Directory(p.join(hold.path, name));
     if (!source.existsSync()) continue;
@@ -285,4 +458,22 @@ void _unparkSkippedDirectories(String root, List<(String, Directory)> parked) {
     source.renameSync(dest.path);
     hold.deleteSync(recursive: true);
   }
+}
+
+bool _skipCheckpointDirectory(String path) {
+  final relative = p.relative(
+    projectAbsolutePath(path),
+    from: Directory.current.resolveSymbolicLinksSync(),
+  );
+  final segments = p.split(relative);
+  return segments.isNotEmpty &&
+      [
+        'android',
+        'ios',
+        'macos',
+        'linux',
+        'windows',
+        'web',
+      ].contains(segments.first) &&
+      checkpointSkipDirectoryNames.contains(p.basename(path));
 }

@@ -198,8 +198,10 @@ android {
       );
     });
 
-    test('inserts signing into a Kotlin release block that has no signingConfig', () {
-      final updated = ensureAndroidGradleReleaseSigning('''
+    test(
+      'inserts signing into a Kotlin release block that has no signingConfig',
+      () {
+        final updated = ensureAndroidGradleReleaseSigning('''
 plugins {
     id("com.android.application")
 }
@@ -212,8 +214,9 @@ android {
     }
 }
 ''', isKotlinDsl: true);
-      expect(updated, contains('signingConfigs.getByName("release")'));
-    });
+        expect(updated, contains('signingConfigs.getByName("release")'));
+      },
+    );
 
     test('inserts loader when the plugins block is missing', () {
       final updated = ensureAndroidGradleReleaseSigning('''
@@ -253,7 +256,8 @@ android {
         '  ',
       ]) {
         expect(
-          () => assertSafeAndroidSigningFileName(name, androidKeystoreConfigKey),
+          () =>
+              assertSafeAndroidSigningFileName(name, androidKeystoreConfigKey),
           throwsA(isA<CustomException>()),
           reason: 'expected unsafe name $name to be rejected',
         );
@@ -518,10 +522,12 @@ android {
       );
     });
 
-    test('prefers Kotlin Gradle when both Groovy and Kotlin files exist', () async {
-      writeCloneSigningFiles();
-      writeKotlinGradleWithDebugReleaseSigning();
-      File('android/app/build.gradle').writeAsStringSync('''
+    test(
+      'prefers Kotlin Gradle when both Groovy and Kotlin files exist',
+      () async {
+        writeCloneSigningFiles();
+        writeKotlinGradleWithDebugReleaseSigning();
+        File('android/app/build.gradle').writeAsStringSync('''
 plugins {
     id "com.android.application"
 }
@@ -533,16 +539,17 @@ android {
     }
 }
 ''');
-      await applyAndroidReleaseSigning('client_a', {});
-      expect(
-        File('android/app/build.gradle.kts').readAsStringSync(),
-        contains('signingConfigs.getByName("release")'),
-      );
-      expect(
-        File('android/app/build.gradle').readAsStringSync(),
-        contains('signingConfig signingConfigs.debug'),
-      );
-    });
+        await applyAndroidReleaseSigning('client_a', {});
+        expect(
+          File('android/app/build.gradle.kts').readAsStringSync(),
+          contains('signingConfigs.getByName("release")'),
+        );
+        expect(
+          File('android/app/build.gradle').readAsStringSync(),
+          contains('signingConfig signingConfigs.debug'),
+        );
+      },
+    );
 
     test('wires Groovy Gradle when only build.gradle exists', () async {
       writeCloneSigningFiles();

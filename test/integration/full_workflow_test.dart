@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import '../test_utils.dart';
 
@@ -93,7 +94,7 @@ void main() {
       final clones = clonesDir
           .listSync()
           .whereType<Directory>()
-          .map((d) => d.path.split('/').last)
+          .map((d) => p.basename(d.path))
           .toList();
 
       expect(clones, hasLength(3));
@@ -439,7 +440,7 @@ void main() {
       final clones = clonesDir
           .listSync()
           .whereType<Directory>()
-          .map((d) => d.path.split('/').last)
+          .map((d) => p.basename(d.path))
           .toList();
 
       expect(clones, hasLength(3));
@@ -465,7 +466,7 @@ void main() {
       // Copy assets to main project (simulate)
       final mainAssets = Directory('${testDir.path}/assets/images');
       for (final file in assetFiles) {
-        final fileName = file.path.split('/').last;
+        final fileName = p.basename(file.path);
         file.copySync('${mainAssets.path}/$fileName');
       }
 

@@ -34,7 +34,7 @@ part 'src/platforms/macos.dart';
 /// package_rename_config:
 ///   ...
 /// ```
-void set(List<String> args) {
+void set(List<String> args, {Set<String>? platforms}) {
   try {
     PackageRenamePlusLogger.info(_majorTaskDoneLine);
 
@@ -60,27 +60,45 @@ void set(List<String> args) {
     if (results.wasParsed('help')) {
       PackageRenamePlusLogger.info(_packageRenameCommands);
       PackageRenamePlusLogger.info(parser.usage);
-      exit(0);
+      return;
     }
     final flavour = results['flavour'] as String?;
     final path = results['path'] as String?;
 
     final config = _getConfig(flavour: flavour, configFile: path);
 
-    _setAndroidConfigurations(config['android']);
-    _setIOSConfigurations(config['ios']);
-    _setLinuxConfigurations(config['linux']);
-    _setMacOSConfigurations(config['macos']);
-    _setWebConfigurations(config['web']);
-    _setWindowsConfigurations(config['windows']);
+    if ((platforms == null || platforms.contains('android')) &&
+        Directory('android').existsSync()) {
+      _setAndroidConfigurations(config['android']);
+    }
+    if ((platforms == null || platforms.contains('ios')) &&
+        Directory('ios').existsSync()) {
+      _setIOSConfigurations(config['ios']);
+    }
+    if ((platforms == null || platforms.contains('linux')) &&
+        Directory('linux').existsSync()) {
+      _setLinuxConfigurations(config['linux']);
+    }
+    if ((platforms == null || platforms.contains('macos')) &&
+        Directory('macos').existsSync()) {
+      _setMacOSConfigurations(config['macos']);
+    }
+    if ((platforms == null || platforms.contains('web')) &&
+        Directory('web').existsSync()) {
+      _setWebConfigurations(config['web']);
+    }
+    if ((platforms == null || platforms.contains('windows')) &&
+        Directory('windows').existsSync()) {
+      _setWindowsConfigurations(config['windows']);
+    }
 
     PackageRenamePlusLogger.info(_successMessage);
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error(e.message);
-    exit(e.code);
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.error(e.toString());
-    exit(255);
+    rethrow;
   }
 }
 
@@ -137,3 +155,8 @@ void _checkConfigContent(String yamlFile) {
     throw _PackageRenameErrors.configNotFound;
   }
 }
+
+String _xmlText(String text) =>
+    const HtmlEscape(HtmlEscapeMode.element).convert(text);
+String _xmlAttribute(String text) =>
+    const HtmlEscape(HtmlEscapeMode.attribute).convert(text);

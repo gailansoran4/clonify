@@ -1,4 +1,5 @@
 import 'package:yaml/yaml.dart';
+import '../custom_exceptions.dart';
 import 'package:clonify/models/custom_field_model.dart';
 
 /// Represents the global settings for the Clonify tool.
@@ -89,43 +90,73 @@ class ClonifySettings {
   /// final settings = ClonifySettings.fromYaml(yaml);
   /// ```
   factory ClonifySettings.fromYaml(YamlMap yaml) {
-    // Parse custom fields if they exist
-    List<CustomField> customFields = [];
-    if (yaml[ClonifySettingsKeys.customFields] != null) {
-      final fields = yaml[ClonifySettingsKeys.customFields] as YamlList;
-      customFields = fields
-          .map((field) => CustomField.fromYaml(field as Map<dynamic, dynamic>))
-          .toList();
+    Object? read(Map values, String key, Type type, Object? fallback) {
+      final value = values[key];
+      if (value == null) return fallback;
+      if ((type == bool && value is! bool) ||
+          (type == String && value is! String)) {
+        throw CustomException(
+          'clonify/clonify_settings.yaml: "$key" must be $type.',
+        );
+      }
+      return value;
     }
 
+    Map section(String name) {
+      final value = yaml[name];
+      if (value == null) return {};
+      if (value is! Map) {
+        throw CustomException(
+          'clonify/clonify_settings.yaml: "$name" must be a map.',
+        );
+      }
+      return value;
+    }
+
+    bool flag(String key, bool fallback) =>
+        read(yaml, key, bool, fallback) as bool;
+    String text(String key, String fallback) =>
+        read(yaml, key, String, fallback) as String;
+    final firebase = section('firebase');
+    final fastlane = section('fastlane');
+    final shorebird = section('shorebird');
+    final rawFields = yaml[ClonifySettingsKeys.customFields];
+    if (rawFields != null && rawFields is! List) {
+      throw CustomException(
+        'custom_fields must be a list in clonify/clonify_settings.yaml.',
+      );
+    }
+    final fields = <CustomField>[];
+    for (final item in (rawFields as List? ?? [])) {
+      if (item is! Map || item['name'] is! String || item['type'] is! String) {
+        throw CustomException(
+          'Each custom field needs string name and type values.',
+        );
+      }
+      final field = CustomField.fromYaml(item);
+      if (!field.isValidType()) {
+        throw CustomException(
+          'Unsupported type for custom field ${field.name}.',
+        );
+      }
+      fields.add(field);
+    }
     return ClonifySettings(
-      firebaseEnabled:
-          yaml[ClonifySettingsKeys.firebase][ClonifySettingsKeys.enabled] ??
-          false,
+      firebaseEnabled: read(firebase, 'enabled', bool, false) as bool,
       firebaseSettingsFilePath:
-          yaml[ClonifySettingsKeys.firebase][ClonifySettingsKeys
-              .settingsFile] ??
-          '',
-      fastlaneEnabled:
-          yaml[ClonifySettingsKeys.fastlane][ClonifySettingsKeys.enabled] ??
-          false,
+          read(firebase, 'settings_file', String, 'firebase.json') as String,
+      fastlaneEnabled: read(fastlane, 'enabled', bool, false) as bool,
       fastlaneSettingsFilePath:
-          yaml[ClonifySettingsKeys.fastlane][ClonifySettingsKeys
-              .settingsFile] ??
-          '',
-      shorebirdEnabled: () {
-        final shorebird = yaml[ClonifySettingsKeys.shorebird];
-        if (shorebird is! YamlMap) return false;
-        return shorebird[ClonifySettingsKeys.enabled] ?? false;
-      }(),
-      companyName: yaml[ClonifySettingsKeys.companyName] ?? '',
-      defaultColor: yaml[ClonifySettingsKeys.defaultColor] ?? '#FFFFFF',
-      needsLauncherIcon: yaml[ClonifySettingsKeys.needsLauncherIcon] ?? false,
-      needsSplashScreen: yaml[ClonifySettingsKeys.needsSplashScreen] ?? false,
-      needsLogo: yaml[ClonifySettingsKeys.needsLogo] ?? false,
-      updateAndroidInfo: yaml[ClonifySettingsKeys.updateAndroidInfo] ?? true,
-      updateIOSInfo: yaml[ClonifySettingsKeys.updateIOSInfo] ?? true,
-      customFields: customFields,
+          read(fastlane, 'settings_file', String, '') as String,
+      shorebirdEnabled: read(shorebird, 'enabled', bool, false) as bool,
+      companyName: text(ClonifySettingsKeys.companyName, ''),
+      defaultColor: text(ClonifySettingsKeys.defaultColor, '#FFFFFF'),
+      needsLauncherIcon: flag(ClonifySettingsKeys.needsLauncherIcon, false),
+      needsSplashScreen: flag(ClonifySettingsKeys.needsSplashScreen, false),
+      needsLogo: flag(ClonifySettingsKeys.needsLogo, false),
+      updateAndroidInfo: flag(ClonifySettingsKeys.updateAndroidInfo, true),
+      updateIOSInfo: flag(ClonifySettingsKeys.updateIOSInfo, true),
+      customFields: List.unmodifiable(fields),
     );
   }
 }

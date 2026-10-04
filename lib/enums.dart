@@ -65,16 +65,20 @@ enum ClonifyCommandFlags {
     description: 'Show the version of the tool',
   ),
   autoUpdate(
-    help: 'Automatically update project dependencies',
-    description: 'Automatically update the project dependencies',
+    help: 'Automatically increment the profile version',
+    description: 'Automatically increment the profile version',
   ),
   isDebug(
-    help: 'Run the command in debug mode for detailed output',
+    help: 'Skip Firebase and Shorebird setup (local branding still runs)',
     description: 'Run the command in debug mode',
   ),
   skipFirebaseConfigure(
-    help: 'Skip Firebase configuration during setup',
-    description: 'Skip Firebase configuration',
+    help: 'Use saved Firebase configuration without running FlutterFire',
+    description: 'Use saved Firebase configuration',
+  ),
+  refreshFirebase(
+    help: 'Refresh and save this clone\'s Firebase configuration online',
+    description: 'Refresh Firebase configuration',
   ),
   skipShorebirdConfigure(
     help: 'Skip Shorebird app_id sync during setup',
@@ -103,15 +107,15 @@ enum ClonifyCommandFlags {
     defaultsTo: true,
   ),
   skipBuildCheck(
-    help: 'Skip build checks for Android and iOS platforms',
+    help: 'Skip build confirmation; identity validation still runs',
     description: 'Skip build checks for Android and iOS',
   ),
   skipAndroidUploadCheck(
-    help: 'Skip upload checks for Android apps',
+    help: 'Upload Android without prompting; validation still runs',
     description: 'Skip Android upload checks',
   ),
   skipIOSUploadCheck(
-    help: 'Skip upload checks for iOS apps',
+    help: 'Upload iOS without prompting; validation still runs',
     description: 'Skip iOS upload checks',
   );
 

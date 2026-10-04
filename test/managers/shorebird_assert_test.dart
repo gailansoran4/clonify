@@ -36,9 +36,12 @@ void main() {
       );
     });
 
-    test('no-ops when shorebird.yaml is missing', () async {
+    test('fails when required shorebird.yaml is missing', () async {
       expect(File(defaultShorebirdYamlPath).existsSync(), isFalse);
-      await configureShorebirdAppId(shorebirdAppId: 'new-id');
+      await expectLater(
+        configureShorebirdAppId(shorebirdAppId: 'new-id'),
+        throwsA(isA<CustomException>()),
+      );
       expect(File(defaultShorebirdYamlPath).existsSync(), isFalse);
     });
   });

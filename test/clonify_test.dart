@@ -227,11 +227,12 @@ default_color: "#ABCDEF"
       if (clonifyDir.existsSync()) clonifyDir.deleteSync(recursive: true);
     });
 
-    test('does not overwrite existing settings file', () async {
+    test('rejects invalid existing settings without overwriting', () async {
       clonifyDir.createSync();
-      settingsFile.writeAsStringSync('company_name: "Existing"\n');
-      await initClonify();
-      expect(settingsFile.readAsStringSync(), contains('Existing'));
+      const original = 'company_name: "Existing"\n';
+      settingsFile.writeAsStringSync(original);
+      await expectLater(initClonify(), throwsA(isA<Exception>()));
+      expect(settingsFile.readAsStringSync(), original);
     });
   });
 

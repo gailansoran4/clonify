@@ -1,31 +1,28 @@
-/// File: clonify.dart
-/// Project: clonify
-/// Author: Mohammad Salameh
-/// Created Date: 25.09.2024
-/// Description: Entry point of the clonify project for the command line.
-library;
-
 import 'dart:io';
-import 'package:clonify/commands/clonify_command_runner.dart';
-import 'package:clonify/custom_exceptions.dart';
-import 'package:clonify/utils/clonify_helpers.dart';
 
-/// This function is responsible for running the clonify command with the provided arguments.
-/// It handles any custom exceptions that may occur during the execution of the command.
-/// In case of a custom exception, the exit code is set to 1.
-/// For any other exceptions, the exit code is set to 64 indicating a command line usage error.
-///
-/// Parameters:
-/// - `arguments`: List of command line arguments passed to the application.
+import 'package:args/command_runner.dart';
+import 'package:clonify/commands/clonify_command_runner.dart';
+import 'package:clonify/utils/command_process.dart';
+import 'package:clonify/utils/file_tree_checkpoint.dart';
+
+/// Classifies usage, operational failures, and cancellation after transactions
+/// have had a chance to restore local files.
 Future<void> main(List<String> arguments) async {
+  final session = CommandSession();
   try {
-    final clonifyCommandRunner = ClonifyCommandRunner();
-    await clonifyCommandRunner.run(arguments);
-  } on CustomException catch (err) {
-    logger.e(err.message);
-    exitCode = 1;
-  } catch (e) {
-    logger.f(e);
+    await session.run(() => ClonifyCommandRunner().run(arguments));
+  } on UsageException catch (error) {
+    stderr.writeln(error);
     exitCode = 64;
+  } on CommandCancelled catch (error) {
+    stderr.writeln(error);
+    exitCode = 130;
+  } catch (error) {
+    stderr.writeln(error);
+    exitCode = session.cancelled || isCancellation(error) ? 130 : 1;
   }
 }
+
+bool isCancellation(Object error) =>
+    error is CommandCancelled ||
+    (error is ConfigureRolledBackException && isCancellation(error.cause));

@@ -43,7 +43,7 @@ dev_dependencies:
 
 **Why these are needed:**
 - Clonify calls these tools as external commands to generate icons and splash screens
-- The tool will check for their presence and warn you if they're missing
+- Preflight checks required generators before making changes and reports missing dependencies
 - You don't need to import them in your code - Clonify uses them automatically
 
 **Note:** Package renaming functionality is now built directly into Clonify - no external package required!
@@ -178,9 +178,9 @@ This will:
 - Generate compile-time configuration class
 - Apply Background Geolocation licenses and Android notification icon
 - Sync per-clone Android Play signing (`upload-keystore.jks` + `key.properties`)
-- Apply all file changes as one transaction: any error restores the project
-  as if `clonify configure` never ran (iOS, Android, version, Shorebird,
-  Firebase files, clone `config.json`)
+- Back up managed project files before applying changes and restore them on
+  failure (iOS, Android, version, Shorebird, Firebase, clone `config.json`).
+  Interrupted operations retain a recovery journal; see `clonify recover` below.
 - **Fail immediately** if required assets or licenses are missing:
   - `launcherIcon` / `splashScreen` / `logo` missing, empty, or not PNG
   - `notificationIcon` configured but the file was not generated
@@ -215,6 +215,84 @@ View all configured clones:
 clonify list
 ```
 
+## Validation and recovery (0.5)
+
+Run these from the Flutter project root:
+
+```bash
+clonify doctor
+clonify doctor --clientId staff
+clonify configure --clientId staff --dry-run
+clonify configure --clientId staff --skipAll
+clonify firebase refresh --clientId staff
+clonify recover
+```
+
+`doctor` checks all profiles, or the selected `--clientId`, without editing
+project files or contacting Firebase. `--dry-run` checks the same local
+requirements for a proposed configure command and lists its steps. Missing
+assets, signing files, tools, malformed JSON/YAML, mismatched profile IDs,
+invalid field types, and required service settings produce a nonzero exit.
+Online authorization and tool-generated outputs are verified during execution.
+
+A configure operation validates first, snapshots managed project files, applies
+local changes, performs Firebase setup last, and verifies the result before
+saving the active profile. Build and upload commands verify the active profile,
+native identifiers, configured Firebase project, version, and configured Android
+signing files. Confirmation flags never bypass identity checks.
+
+On failure or cancellation, local managed files are restored. If restoration
+fails, Clonify keeps the backup and prints its location. After a crash or forced
+termination, stop any orphaned external tool processes and run `clonify recover`.
+The recovery journal is in `.dart_tool/clonify/recovery.json`; backups live in
+`.dart_tool/clonify/checkpoints/`. Do not delete `.dart_tool` while recovery is
+pending. Recovery works even if the settings file is broken. A project lock
+prevents simultaneous mutating Clonify commands.
+
+Backups cover native platform folders, branding, generated clone/localization
+files, profile configuration, versions, and Firebase metadata. Regenerable build
+and tool caches are excluded. External tool caches outside the project, cloud
+Firebase app registrations, and store uploads cannot be rolled back. An upload
+failure reports completed uploads and warns when remote completion is uncertain.
+Shorebird release/patch failures restore the preceding local configure too;
+published remote releases or patches must be checked separately before retrying.
+
+### Upgrade workflow
+
+Existing commands and profile JSON remain supported. Dart 3.8.1 or newer is
+supported. After upgrading, configure each profile once before building it;
+Clonify records the successful configuration in `clonify/active_profile.json`.
+Changing a profile's app settings requires another configure. Changing only its
+credential path does not invalidate an existing build.
+
+Use `clonify build` before uploading: successful builds receive local SHA-256
+receipts tied to the profile in `.dart_tool/clonify/builds/`. Old, modified, or
+unverified artifacts are rejected. Rebuild after deleting `.dart_tool`.
+Android bundles use `flutter build appbundle`. Platform builds run sequentially;
+IPA builds require macOS. For Android only:
+
+```bash
+clonify build --clientId staff --skipAll --no-buildIpa
+clonify upload --clientId staff --skipAll --no-uploadIOS
+```
+
+Fastfiles must define `bundleId`, `app_version`, and (Android) `app_version_code`
+variables and pass a literal `aab: "..."` or `ipa: "..."` to their upload action.
+Clonify binds that argument to the verified artifact before running the lane.
+Opaque dynamic artifact-selection lanes are rejected so they cannot silently
+upload another customer's file. Keep store authentication configured in Fastlane.
+
+`--skipPubUpdate` now leaves the pubspec version unchanged. A mismatched pubspec
+version blocks build/upload until reconciled. `--skipAll` skips prompts;
+`--autoUpdate` increments the version rather than updating dependencies.
+`--isDebug` skips Firebase and Shorebird setup; it does not disable validation.
+
+Exit codes: `0` success, `1` operational failure, `64` invalid command usage,
+`130` cancellation. `--no-tui` uses plain output for scripts and CI.
+On Windows, batch tools support spaces in paths, but reject shell characters
+such as `&`, `%`, `!`, and quotes in tool paths or arguments. Move the tool or
+credential to a path without those characters before retrying.
+
 ## Commands
 
 ### Global Options
@@ -240,10 +318,12 @@ Configure the Flutter project for a specific client.
 
 **Options:**
 - `--clientId <id>` - Client ID to configure (or use last)
+- `--dry-run` - Validate and preview without changes
 - `--skipAll` - Skip all user prompts
 - `--autoUpdate` - Automatically increment version
-- `--isDebug` - Run in debug mode
-- `--skipFirebaseConfigure` - Skip Firebase configuration
+- `--isDebug` - Skip Firebase and Shorebird setup
+- `--skipFirebaseConfigure` - Restore matching saved Firebase files without online setup
+- `--refreshFirebase` - Configure Firebase online and replace this clone's saved files
 - `--skipShorebirdConfigure` - Skip Shorebird app_id sync
 - `--skipPubUpdate` - Skip pubspec.yaml updates
 - `--skipVersionUpdate` - Skip version updates
@@ -259,7 +339,7 @@ Build the Flutter project clone.
 - `--buildAab` - Build Android App Bundle (default: true)
 - `--buildApk` - Build Android APK (default: false)
 - `--buildIpa` - Build iOS IPA (default: true)
-- `--skipBuildCheck` - Skip pre-build checks
+- `--skipBuildCheck` - Skip build confirmation (validation still runs)
 
 ### `clonify upload [options]`
 Upload builds to app stores via Fastlane.
@@ -269,8 +349,9 @@ Upload builds to app stores via Fastlane.
 **Options:**
 - `--clientId <id>` - Client ID to upload
 - `--skipAll` - Skip all prompts
-- `--skipAndroidUploadCheck` - Skip Android upload verification
-- `--skipIOSUploadCheck` - Skip iOS upload verification
+- `--skipAndroidUploadCheck` - Upload Android without prompting (validation still runs)
+- `--skipIOSUploadCheck` - Upload iOS without prompting (validation still runs)
+- `--no-uploadAndroid` / `--no-uploadIOS` - Exclude a platform
 
 ### `clonify list`
 List all configured clones.
@@ -334,6 +415,7 @@ custom_fields:
   "baseUrl": "https://api.client-a.com",
   "primaryColor": "0xFF6200EE",
   "firebaseProjectId": "firebase-client-a",
+  "firebaseServiceAccount": "~/Desktop/project-firebase.json",
   "backgroundSplashColor": "0xFFFFFFFF",
   "androidKeystore": "upload-keystore.jks",
   "androidKeyProperties": "key.properties",
@@ -422,16 +504,77 @@ clonify list
 
 ### Firebase Integration
 
-Firebase is **optional**. To use Firebase:
+Firebase is **optional**. Enable `firebase.enabled`, set `settings_file` to your
+`firebase.json`, and set each clone's `firebaseProjectId` and `packageName`.
 
-1. Enable during `clonify init`
-2. Provide path to `firebase.json`
-3. During clone creation, provide Firebase project ID
-4. Clonify will create Firebase project and configure Flutterfire
+#### One-time setup without Gmail switching
 
-To skip Firebase:
-- Set `firebase.enabled: false` in settings
-- Use `--skipFirebaseConfigure` flag
+Install Firebase CLI and FlutterFire CLI (`dart pub global activate
+flutterfire_cli`, version 1.4.1 or newer) once on each developer's computer.
+Create a Google service account and grant it the permissions needed to read app
+configuration and register apps in each target Firebase project. The project
+owner's Gmail can differ; project access is what matters. Project creation needs
+additional permission, so normally create the Firebase project first.
+
+Keep the private service-account JSON **outside the Flutter project and Git**.
+For example, save it on the Desktop and put its normal path in each profile:
+
+```json
+"firebaseProjectId": "amada-6c209",
+"firebaseServiceAccount": "~/Desktop/amada-firebase.json"
+```
+
+No shell export is needed. Different profiles can use different JSON files and
+projects. On another computer, store an authorized credential there and update
+the path once. Cached switches do not need this private file.
+
+Advanced setups may still use `env:VARIABLE_NAME`. Without a profile reference,
+Clonify checks `CLONIFY_FIREBASE_SERVICE_ACCOUNT`, then
+`GOOGLE_APPLICATION_CREDENTIALS`; when neither is set, the saved Firebase CLI
+login is used for online setup.
+Service-account setup runs in a temporary Firebase account store, preserving
+your saved Gmail logins and preventing them from overriding the selected key.
+
+```bash
+# Set up or refresh this clone's registered Android/iOS apps once:
+clonify configure --clientId client_a --refreshFirebase --skipVersionUpdate
+
+# Normal switches restore saved configuration without Firebase login:
+clonify configure --clientId client_a --skipVersionUpdate
+clonify configure --clientId client_b --skipVersionUpdate
+```
+
+#### Share saved Firebase files with your team
+
+Each configured clone saves these public app settings under
+`clonify/clones/{clientId}/firebase/`:
+
+```text
+lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+firebase.json                         # only Flutter metadata
+```
+
+Share this directory with the project. Your friend can switch an already saved
+clone without the private credential, Firebase CLI, or FlutterFire CLI.
+Clonify validates project IDs, bundle/package names, app IDs, sender IDs, and API
+keys before copying. Deployment sections such as Hosting and Functions stay in
+the configured Firebase settings file. A mismatched or incomplete saved
+configuration fails; use `--refreshFirebase` after changing a clone's project or
+package.
+Configuration that already matches the active app can also be saved without
+going online. Firebase configuration supports Android and iOS. Newly added
+Firebase products may need a refresh to update native build integration.
+
+`--skipFirebaseConfigure` allows saved/matching files only and never runs
+FlutterFire. `--skipAll` skips prompts but still restores or configures Firebase.
+Disable `firebase.enabled` entirely only for apps that do not use Firebase.
+
+These files contain public Firebase app identifiers. A service-account JSON
+contains private administration credentials and must never be placed in this
+cache, clone assets, mobile app, or source control. A Firebase API key alone
+cannot authorize app registration or configuration downloads.
 
 ### Shorebird Integration
 

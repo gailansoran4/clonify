@@ -1,3 +1,45 @@
+## 0.5.0 - 2026-10-05
+
+- Add `doctor`, `configure --dry-run`, `recover`, and `firebase refresh` commands.
+- Validate profile fields, paths, assets, credentials, tool availability, and
+  service requirements before changing a profile. Keep cached Firebase switches
+  offline and preserve normal external credential paths.
+- Use one checked subprocess runner with argument arrays, actionable failures,
+  timeouts, cancellation, and descendant cleanup. Return distinct usage,
+  operational failure, and cancellation exit codes.
+- Add project locking, durable recovery journals, retained backups on restore
+  failure, and rollback for configure/build/upload/native rename failures.
+- Verify the active profile, package identifiers, Firebase configuration, version,
+  and Android signing before builds/uploads. Bind upload artifacts to successful
+  builds using profile fingerprints and SHA-256 receipts.
+- Build platforms sequentially with `flutter build appbundle`; await Fastfile
+  updates and uploads in order, fix the iOS confirmation flag, and add upload
+  platform selection. Report partial remote completion honestly.
+- Preserve custom MainActivity code on repeated switches, safely escape generated
+  Dart/YAML/XML strings, validate custom fields, and await active-profile writes.
+- Make `--skipPubUpdate` honor its name and make `--skipAll` skip version prompts.
+- Reuse the selected profile with `--skipAll`, preserve upload cancellation exit
+  codes, and include the Shorebird release/patch step in local configure recovery.
+- Handle Windows short folder names, native cache separators, and batch-tool
+  arguments containing spaces; reject unsafe batch shell characters.
+- Split branding and clone-code generation into focused modules. Make parsed
+  clone fields immutable, remove unused process/mock/codegen dependencies, and
+  update compatible packages while retaining Dart 3.8.1 support.
+- Add real-entrypoint tests with isolated fake tools and CI on macOS, Linux,
+  Windows, and the minimum supported Dart SDK.
+
+## 0.4.17 - 2026-10-04
+
+- Configure restores validated Firebase files saved per clone without login or
+  FlutterFire. First setup saves Android, iOS, Dart, and Flutter metadata.
+- Support external service-account credentials via `firebaseServiceAccount`
+  (`env:NAME`, absolute path, or `~/path`), with environment fallbacks. Firebase
+  runs with an isolated account store so a cached Gmail login cannot override it.
+- Add `--refreshFirebase` for online updates. `--skipFirebaseConfigure` permits
+  only matching saved/current configuration and never runs FlutterFire.
+- Propagate Firebase failures through configure rollback instead of reporting
+  success with another customer's configuration. Preserve deployment settings.
+
 ## 0.4.16 - 2026-09-09
 
 ### 🐛 Bug Fixes

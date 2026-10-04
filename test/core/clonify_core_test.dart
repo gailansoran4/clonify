@@ -2,6 +2,7 @@
 library;
 
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import '../test_utils.dart';
 
@@ -309,7 +310,7 @@ firebase:
       final assets = assetsDir
           .listSync()
           .whereType<File>()
-          .map((f) => f.path.split('/').last)
+          .map((f) => p.basename(f.path))
           .toList();
 
       expect(assets, contains('icon.png'));

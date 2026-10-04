@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:clonify/custom_exceptions.dart';
 import 'package:clonify/utils/file_tree_checkpoint.dart';
@@ -180,17 +181,21 @@ void main() {
         ..createSync(recursive: true)
         ..writeAsStringSync('');
       File('ios/Runner/empty.bin').writeAsBytesSync(const []);
-      File('ios/Runner/key.jks').writeAsBytesSync(const [0xFE, 0xED, 0xFE, 0xED]);
+      File(
+        'ios/Runner/key.jks',
+      ).writeAsBytesSync(const [0xFE, 0xED, 0xFE, 0xED]);
       final checkpoint = FileTreeCheckpoint.capture(const ['ios']);
       File('ios/Runner/café.txt').writeAsStringSync('changed');
       File('ios/Runner/key.jks').writeAsBytesSync(const [0x00]);
       checkpoint.restore();
       expect(File('ios/Runner/café.txt').readAsStringSync(), '');
       expect(File('ios/Runner/empty.bin').readAsBytesSync(), isEmpty);
-      expect(
-        File('ios/Runner/key.jks').readAsBytesSync(),
-        const [0xFE, 0xED, 0xFE, 0xED],
-      );
+      expect(File('ios/Runner/key.jks').readAsBytesSync(), const [
+        0xFE,
+        0xED,
+        0xFE,
+        0xED,
+      ]);
     });
 
     test('recreates a tree deleted after capture', () {
@@ -304,6 +309,70 @@ void main() {
       );
     });
 
+    test(
+      'restores custom Firebase metadata alongside default roots on failure',
+      () async {
+        final customSettings = File('settings/custom-firebase.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(
+            '{"hosting":{"public":"old-hosting"},"flutter":{"project":"old"}}\n',
+          );
+        final originalSettings = customSettings.readAsBytesSync();
+        File('lib/firebase_options.dart')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('OLD_FIREBASE');
+
+        await expectLater(
+          runConfigureTransaction(() async {
+            customSettings.writeAsStringSync('{"flutter":{"project":"new"}}');
+            File('lib/firebase_options.dart').writeAsStringSync('NEW_FIREBASE');
+            throw CustomException('failed after updating custom metadata');
+          }, roots: {...configureMutableRoots, customSettings.path}),
+          throwsA(
+            isA<ConfigureRolledBackException>().having(
+              (error) => error.restoreError,
+              'restoreError',
+              isNull,
+            ),
+          ),
+        );
+
+        expect(customSettings.readAsBytesSync(), originalSettings);
+        expect(
+          File('lib/firebase_options.dart').readAsStringSync(),
+          'OLD_FIREBASE',
+        );
+      },
+    );
+
+    test(
+      'removes custom Firebase metadata created by a failed transaction',
+      () async {
+        final customSettings = File('settings/custom-firebase.json');
+        File('firebase.json').writeAsStringSync('OLD_METADATA');
+
+        await expectLater(
+          runConfigureTransaction(() async {
+            customSettings
+              ..createSync(recursive: true)
+              ..writeAsStringSync('{"flutter":{"project":"new"}}');
+            File('firebase.json').writeAsStringSync('NEW_METADATA');
+            throw CustomException('failed after creating custom metadata');
+          }, roots: {...configureMutableRoots, customSettings.path}),
+          throwsA(
+            isA<ConfigureRolledBackException>().having(
+              (error) => error.restoreError,
+              'restoreError',
+              isNull,
+            ),
+          ),
+        );
+
+        expect(customSettings.existsSync(), isFalse);
+        expect(File('firebase.json').readAsStringSync(), 'OLD_METADATA');
+      },
+    );
+
     test('keeps writes when the transaction succeeds', () async {
       File('ios/Runner/Info.plist')
         ..createSync(recursive: true)
@@ -402,7 +471,9 @@ void main() {
     test('deletes files that did not exist before configure', () async {
       await expectLater(
         runConfigureTransaction(() async {
-          File('.firebaserc').writeAsStringSync('{"projects":{"default":"new"}}');
+          File(
+            '.firebaserc',
+          ).writeAsStringSync('{"projects":{"default":"new"}}');
           File('shorebird.yaml').writeAsStringSync('app_id: new');
           File('clonify/clones/client/config.json')
             ..createSync(recursive: true)
@@ -420,20 +491,11 @@ void main() {
       File('ios/a.txt')
         ..createSync(recursive: true)
         ..writeAsStringSync('OLD');
-      final before = Directory.systemTemp
-          .listSync()
-          .whereType<Directory>()
-          .map((dir) => dir.path)
-          .toSet();
-
       await expectLater(
         runConfigureTransaction(() async {
-          for (final dir in Directory.systemTemp.listSync().whereType<Directory>()) {
-            final name = dir.path.split(Platform.pathSeparator).last;
-            if (!name.startsWith('clonify_checkpoint_')) continue;
-            if (before.contains(dir.path)) continue;
-            dir.deleteSync(recursive: true);
-          }
+          final journal =
+              jsonDecode(File(recoveryJournalPath).readAsStringSync()) as Map;
+          Directory(journal['backup'] as String).deleteSync(recursive: true);
           File('ios/a.txt').writeAsStringSync('NEW');
           throw CustomException('signing failed');
         }),
@@ -444,11 +506,7 @@ void main() {
                 'message',
                 contains('signing failed'),
               )
-              .having(
-                (error) => error.restoreError,
-                'restoreError',
-                isNotNull,
-              ),
+              .having((error) => error.restoreError, 'restoreError', isNotNull),
         ),
       );
       expect(File('ios/a.txt').readAsStringSync(), 'NEW');
