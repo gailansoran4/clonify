@@ -38,8 +38,13 @@ void main() {
     '--no-buildIpa',
   ];
 
-  void success(ProcessResult result) =>
-      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+  void success(ProcessResult result) => expect(
+    result.exitCode,
+    0,
+    reason:
+        '${result.stdout}\n${result.stderr}\n'
+        '${fixture.file('tool-stderr.log').existsSync() ? fixture.file('tool-stderr.log').readAsStringSync() : ''}',
+  );
   List<List<dynamic>> calls() => fixture
       .file('tool-calls.jsonl')
       .readAsLinesSync()

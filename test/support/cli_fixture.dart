@@ -25,7 +25,7 @@ class CliFixture {
       );
       if (Platform.isWindows) {
         file.writeAsStringSync(
-          '@echo off\r\n"$executable" ${toolExecutable == null ? '"$script" ' : ''}"$tool" %*\r\n',
+          '@echo off\r\n"$executable" ${toolExecutable == null ? '"$script" ' : ''}"$tool" %* 2>> tool-stderr.log\r\n',
         );
       } else {
         String quote(String text) => "'${text.replaceAll("'", "'\\''")}'";

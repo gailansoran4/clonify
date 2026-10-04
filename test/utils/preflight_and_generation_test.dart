@@ -225,7 +225,7 @@ void main() {
     await recordBuild('alpha', config, 'appbundle', 'build/example.aab');
     expect(
       await assertVerifiedBuild('alpha', config, 'appbundle'),
-      'build/example.aab',
+      File('build/example.aab').path.replaceAll('/', Platform.pathSeparator),
     );
     final receipt =
         jsonDecode(File(buildReceiptPath('alpha')).readAsStringSync()) as Map;

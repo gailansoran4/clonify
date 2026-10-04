@@ -20,6 +20,8 @@
 - Make `--skipPubUpdate` honor its name and make `--skipAll` skip version prompts.
 - Reuse the selected profile with `--skipAll`, preserve upload cancellation exit
   codes, and include the Shorebird release/patch step in local configure recovery.
+- Handle Windows short folder names, native cache separators, and batch-tool
+  arguments containing spaces; reject unsafe batch shell characters.
 - Split branding and clone-code generation into focused modules. Make parsed
   clone fields immutable, remove unused process/mock/codegen dependencies, and
   update compatible packages while retaining Dart 3.8.1 support.

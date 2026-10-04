@@ -70,6 +70,33 @@ void main() {
     expect(File('pubspec.yaml').readAsStringSync(), 'old');
   });
 
+  test('Windows batch tools receive paths containing spaces', () async {
+    final script = File('echo args.dart')
+      ..writeAsStringSync(
+        'import "dart:convert"; void main(List<String> args) { print(jsonEncode(args)); }',
+      );
+    final batch = File('echo tool.cmd')
+      ..writeAsStringSync(
+        '@echo off\r\n"${Platform.resolvedExecutable}" "%~dp0echo args.dart" %*\r\n',
+      );
+    final args = [
+      '--service-account',
+      File('account with spaces.json').absolute.path,
+    ];
+    final result = await executeCommand(
+      batch.absolute.path,
+      args,
+      checkExitCode: false,
+    );
+    expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+    expect(jsonDecode((result.stdout as String).trim()), args);
+    expect(script.existsSync(), isTrue);
+    await expectLater(
+      executeCommand(batch.absolute.path, ['value&echo injected']),
+      throwsA(isA<CustomException>()),
+    );
+  }, skip: Platform.isWindows ? false : 'Windows batch wrapper');
+
   test('missing executables fail clearly without exposing arguments', () async {
     await expectLater(
       executeCommand('clonify-tool-that-does-not-exist', ['PRIVATE_SECRET']),

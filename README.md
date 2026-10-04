@@ -289,6 +289,9 @@ version blocks build/upload until reconciled. `--skipAll` skips prompts;
 
 Exit codes: `0` success, `1` operational failure, `64` invalid command usage,
 `130` cancellation. `--no-tui` uses plain output for scripts and CI.
+On Windows, batch tools support spaces in paths, but reject shell characters
+such as `&`, `%`, `!`, and quotes in tool paths or arguments. Move the tool or
+credential to a path without those characters before retrying.
 
 ## Commands
 

@@ -48,8 +48,8 @@ void checkCommandCancellation() {
   (Zone.current[CommandSession] as CommandSession?)?.check();
 }
 
-/// Executes argument arrays without a shell. No argument or credential values
-/// are included in failure messages. Output can be captured or inherited.
+/// Executes argument arrays. Windows batch tools use cmd with checked arguments;
+/// native executables need no shell. Failure messages omit argument values.
 Future<ProcessResult> executeCommand(
   String executable,
   List<String> arguments, {
@@ -67,20 +67,35 @@ Future<ProcessResult> executeCommand(
         environment: {...Platform.environment, ...?environment},
       ) ??
       executable;
+  final batch =
+      Platform.isWindows &&
+      (resolved.toLowerCase().endsWith('.bat') ||
+          resolved.toLowerCase().endsWith('.cmd'));
+  if (batch &&
+      [
+        resolved,
+        ...arguments,
+      ].any((value) => RegExp('["%&|<>^!\\r\\n]').hasMatch(value))) {
+    throw CustomException(
+      'Windows batch tools cannot safely accept shell metacharacters in their path or arguments. Use a tool and credential path without those characters.',
+    );
+  }
   final Process process;
   try {
     process = await Process.start(
-      resolved,
-      arguments,
+      batch
+          ? '${Platform.environment['SystemRoot'] ?? r'C:\Windows'}\\System32\\cmd.exe'
+          : resolved,
+      // CALL avoids cmd stripping the executable's opening quote when both
+      // the tool path and a credential argument contain spaces.
+      batch
+          ? ['/d', '/v:off', '/c', 'call', resolved, ...arguments]
+          : arguments,
       workingDirectory: workingDirectory,
       environment: environment,
       mode: inheritStdio
           ? ProcessStartMode.inheritStdio
           : ProcessStartMode.normal,
-      runInShell:
-          Platform.isWindows &&
-          (resolved.toLowerCase().endsWith('.bat') ||
-              resolved.toLowerCase().endsWith('.cmd')),
     );
   } on ProcessException catch (error) {
     throw CustomException(
