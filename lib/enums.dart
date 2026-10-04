@@ -73,8 +73,12 @@ enum ClonifyCommandFlags {
     description: 'Run the command in debug mode',
   ),
   skipFirebaseConfigure(
-    help: 'Skip Firebase configuration during setup',
-    description: 'Skip Firebase configuration',
+    help: 'Use saved Firebase configuration without running FlutterFire',
+    description: 'Use saved Firebase configuration',
+  ),
+  refreshFirebase(
+    help: 'Refresh and save this clone\'s Firebase configuration online',
+    description: 'Refresh Firebase configuration',
   ),
   skipShorebirdConfigure(
     help: 'Skip Shorebird app_id sync during setup',

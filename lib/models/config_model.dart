@@ -54,6 +54,10 @@ class CloneConfigModel {
   /// The Firebase project ID.
   String? firebaseProjectId;
 
+  /// Credential reference (env:NAME or a path outside the Flutter project).
+  /// This tooling-only value is never generated into the mobile app.
+  String? firebaseServiceAccount;
+
   /// The Shorebird app ID used for code-push releases/patches.
   String? shorebirdAppId;
 
@@ -113,6 +117,7 @@ class CloneConfigModel {
     backgroundNotificationColor = json['backgroundNotificationColor'];
     backgroundSplashColor = json['backgroundSplashColor'];
     firebaseProjectId = json['firebaseProjectId'];
+    firebaseServiceAccount = json['firebaseServiceAccount'];
     shorebirdAppId = json['shorebirdAppId'];
     backgroundGeolocationLicenseAndroid =
         json['backgroundGeolocationLicenseAndroid'];

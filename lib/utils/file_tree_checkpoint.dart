@@ -171,8 +171,11 @@ class CheckpointEntry {
   final bool isDirectory;
 }
 
-Future<T> runConfigureTransaction<T>(Future<T> Function() body) async {
-  final checkpoint = FileTreeCheckpoint.capture();
+Future<T> runConfigureTransaction<T>(
+  Future<T> Function() body, {
+  Iterable<String> roots = configureMutableRoots,
+}) async {
+  final checkpoint = FileTreeCheckpoint.capture(roots);
   try {
     final result = await body();
     checkpoint.discard();

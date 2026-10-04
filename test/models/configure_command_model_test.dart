@@ -16,6 +16,7 @@ void main() {
         ClonifyCommandFlags.autoUpdate,
         ClonifyCommandFlags.isDebug,
         ClonifyCommandFlags.skipFirebaseConfigure,
+        ClonifyCommandFlags.refreshFirebase,
         ClonifyCommandFlags.skipShorebirdConfigure,
         ClonifyCommandFlags.skipPubUpdate,
         ClonifyCommandFlags.skipVersionUpdate,
@@ -31,6 +32,7 @@ void main() {
       expect(model.autoUpdate, isFalse);
       expect(model.isDebug, isFalse);
       expect(model.skipFirebaseConfigure, isFalse);
+      expect(model.refreshFirebase, isFalse);
       expect(model.skipShorebirdConfigure, isFalse);
       expect(model.skipPubUpdate, isFalse);
       expect(model.skipVersionUpdate, isFalse);
@@ -45,6 +47,7 @@ void main() {
           '--autoUpdate',
           '--isDebug',
           '--skipFirebaseConfigure',
+          '--refreshFirebase',
           '--skipShorebirdConfigure',
           '--skipPubUpdate',
           '--skipVersionUpdate',
@@ -56,6 +59,7 @@ void main() {
       expect(model.autoUpdate, isTrue);
       expect(model.isDebug, isTrue);
       expect(model.skipFirebaseConfigure, isTrue);
+      expect(model.refreshFirebase, isTrue);
       expect(model.skipShorebirdConfigure, isTrue);
       expect(model.skipPubUpdate, isTrue);
       expect(model.skipVersionUpdate, isTrue);

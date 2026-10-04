@@ -243,7 +243,8 @@ Configure the Flutter project for a specific client.
 - `--skipAll` - Skip all user prompts
 - `--autoUpdate` - Automatically increment version
 - `--isDebug` - Run in debug mode
-- `--skipFirebaseConfigure` - Skip Firebase configuration
+- `--skipFirebaseConfigure` - Restore matching saved Firebase files without online setup
+- `--refreshFirebase` - Configure Firebase online and replace this clone's saved files
 - `--skipShorebirdConfigure` - Skip Shorebird app_id sync
 - `--skipPubUpdate` - Skip pubspec.yaml updates
 - `--skipVersionUpdate` - Skip version updates
@@ -334,6 +335,7 @@ custom_fields:
   "baseUrl": "https://api.client-a.com",
   "primaryColor": "0xFF6200EE",
   "firebaseProjectId": "firebase-client-a",
+  "firebaseServiceAccount": "env:CLONIFY_FIREBASE_SERVICE_ACCOUNT",
   "backgroundSplashColor": "0xFFFFFFFF",
   "androidKeystore": "upload-keystore.jks",
   "androidKeyProperties": "key.properties",
@@ -422,16 +424,80 @@ clonify list
 
 ### Firebase Integration
 
-Firebase is **optional**. To use Firebase:
+Firebase is **optional**. Enable `firebase.enabled`, set `settings_file` to your
+`firebase.json`, and set each clone's `firebaseProjectId` and `packageName`.
 
-1. Enable during `clonify init`
-2. Provide path to `firebase.json`
-3. During clone creation, provide Firebase project ID
-4. Clonify will create Firebase project and configure Flutterfire
+#### One-time setup without Gmail switching
 
-To skip Firebase:
-- Set `firebase.enabled: false` in settings
-- Use `--skipFirebaseConfigure` flag
+Install Firebase CLI and FlutterFire CLI (`dart pub global activate
+flutterfire_cli`, version 1.4.1 or newer) once on each developer's computer.
+Create a Google service account and grant it the permissions needed to read app
+configuration and register apps in each target Firebase project. The project
+owner's Gmail can differ; project access is what matters. Project creation needs
+additional permission, so normally create the Firebase project first.
+
+Keep the private service-account JSON **outside the Flutter project and Git**.
+On your Mac or your friend's computer, point a local environment variable to it:
+
+```bash
+export CLONIFY_FIREBASE_SERVICE_ACCOUNT="$HOME/.config/clonify/amada-service-account.json"
+```
+
+Save that export in your shell startup file for future terminals. Clone JSON
+contains only a reference, never the private key:
+
+```json
+"firebaseProjectId": "amada-6c209",
+"firebaseServiceAccount": "env:CLONIFY_FIREBASE_SERVICE_ACCOUNT"
+```
+
+Different projects may reference different environment variables. Absolute paths
+and `~/` paths are also accepted. Without a clone reference, Clonify checks
+`CLONIFY_FIREBASE_SERVICE_ACCOUNT`, then `GOOGLE_APPLICATION_CREDENTIALS`; when
+neither is set, the existing Firebase CLI login remains available for setup.
+Service-account setup runs in a temporary Firebase account store, preserving
+your saved Gmail logins and preventing them from overriding the selected key.
+
+```bash
+# Set up or refresh this clone's registered Android/iOS apps once:
+clonify configure --clientId client_a --refreshFirebase --skipVersionUpdate
+
+# Normal switches restore saved configuration without Firebase login:
+clonify configure --clientId client_a --skipVersionUpdate
+clonify configure --clientId client_b --skipVersionUpdate
+```
+
+#### Share saved Firebase files with your team
+
+Each configured clone saves these public app settings under
+`clonify/clones/{clientId}/firebase/`:
+
+```text
+lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+firebase.json                         # only Flutter metadata
+```
+
+Share this directory with the project. Your friend can switch an already saved
+clone without the private credential, Firebase CLI, or FlutterFire CLI.
+Clonify validates project IDs, bundle/package names, app IDs, sender IDs, and API
+keys before copying. Deployment sections such as Hosting and Functions stay in
+the configured Firebase settings file. A mismatched or incomplete saved
+configuration fails; use `--refreshFirebase` after changing a clone's project or
+package.
+Configuration that already matches the active app can also be saved without
+going online. Firebase configuration supports Android and iOS. Newly added
+Firebase products may need a refresh to update native build integration.
+
+`--skipFirebaseConfigure` allows saved/matching files only and never runs
+FlutterFire. `--skipAll` skips prompts but still restores or configures Firebase.
+Disable `firebase.enabled` entirely only for apps that do not use Firebase.
+
+These files contain public Firebase app identifiers. A service-account JSON
+contains private administration credentials and must never be placed in this
+cache, clone assets, mobile app, or source control. A Firebase API key alone
+cannot authorize app registration or configuration downloads.
 
 ### Shorebird Integration
 

@@ -68,9 +68,11 @@ void main() {
         '--clientId',
         'demo',
         '--skipFirebaseConfigure',
+        '--refreshFirebase',
         '--skipShorebirdConfigure',
       ]);
       expect(results['skipFirebaseConfigure'], isTrue);
+      expect(results['refreshFirebase'], isTrue);
       expect(results['skipShorebirdConfigure'], isTrue);
     });
 

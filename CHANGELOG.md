@@ -1,3 +1,15 @@
+## 0.4.17 - 2026-10-04
+
+- Configure restores validated Firebase files saved per clone without login or
+  FlutterFire. First setup saves Android, iOS, Dart, and Flutter metadata.
+- Support external service-account credentials via `firebaseServiceAccount`
+  (`env:NAME`, absolute path, or `~/path`), with environment fallbacks. Firebase
+  runs with an isolated account store so a cached Gmail login cannot override it.
+- Add `--refreshFirebase` for online updates. `--skipFirebaseConfigure` permits
+  only matching saved/current configuration and never runs FlutterFire.
+- Propagate Firebase failures through configure rollback instead of reporting
+  success with another customer's configuration. Preserve deployment settings.
+
 ## 0.4.16 - 2026-09-09
 
 ### 🐛 Bug Fixes

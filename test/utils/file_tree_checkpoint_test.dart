@@ -304,6 +304,70 @@ void main() {
       );
     });
 
+    test(
+      'restores custom Firebase metadata alongside default roots on failure',
+      () async {
+        final customSettings = File('settings/custom-firebase.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(
+            '{"hosting":{"public":"old-hosting"},"flutter":{"project":"old"}}\n',
+          );
+        final originalSettings = customSettings.readAsBytesSync();
+        File('lib/firebase_options.dart')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('OLD_FIREBASE');
+
+        await expectLater(
+          runConfigureTransaction(() async {
+            customSettings.writeAsStringSync('{"flutter":{"project":"new"}}');
+            File('lib/firebase_options.dart').writeAsStringSync('NEW_FIREBASE');
+            throw CustomException('failed after updating custom metadata');
+          }, roots: {...configureMutableRoots, customSettings.path}),
+          throwsA(
+            isA<ConfigureRolledBackException>().having(
+              (error) => error.restoreError,
+              'restoreError',
+              isNull,
+            ),
+          ),
+        );
+
+        expect(customSettings.readAsBytesSync(), originalSettings);
+        expect(
+          File('lib/firebase_options.dart').readAsStringSync(),
+          'OLD_FIREBASE',
+        );
+      },
+    );
+
+    test(
+      'removes custom Firebase metadata created by a failed transaction',
+      () async {
+        final customSettings = File('settings/custom-firebase.json');
+        File('firebase.json').writeAsStringSync('OLD_METADATA');
+
+        await expectLater(
+          runConfigureTransaction(() async {
+            customSettings
+              ..createSync(recursive: true)
+              ..writeAsStringSync('{"flutter":{"project":"new"}}');
+            File('firebase.json').writeAsStringSync('NEW_METADATA');
+            throw CustomException('failed after creating custom metadata');
+          }, roots: {...configureMutableRoots, customSettings.path}),
+          throwsA(
+            isA<ConfigureRolledBackException>().having(
+              (error) => error.restoreError,
+              'restoreError',
+              isNull,
+            ),
+          ),
+        );
+
+        expect(customSettings.existsSync(), isFalse);
+        expect(File('firebase.json').readAsStringSync(), 'OLD_METADATA');
+      },
+    );
+
     test('keeps writes when the transaction succeeds', () async {
       File('ios/Runner/Info.plist')
         ..createSync(recursive: true)

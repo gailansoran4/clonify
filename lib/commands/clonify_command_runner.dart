@@ -220,6 +220,7 @@ class ConfigureCommand extends ClientIdCommand {
       ClonifyCommandFlags.autoUpdate,
       ClonifyCommandFlags.isDebug,
       ClonifyCommandFlags.skipFirebaseConfigure,
+      ClonifyCommandFlags.refreshFirebase,
       ClonifyCommandFlags.skipShorebirdConfigure,
       ClonifyCommandFlags.skipPubUpdate,
       ClonifyCommandFlags.skipVersionUpdate,

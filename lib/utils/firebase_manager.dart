@@ -1,12 +1,14 @@
 // ignore_for_file: avoid_print
 
+import 'dart:convert';
 import 'dart:io';
 
+import '../custom_exceptions.dart';
 import 'clonify_helpers.dart';
+import 'firebase_config_cache.dart';
+import 'firebase_credentials.dart';
 
-import 'dart:convert';
-
-/// Returns true when [lib/firebase_options.dart] already targets [packageName].
+/// Returns true when the active Firebase options target [packageName].
 bool firebaseOptionsMatchPackage(String packageName) {
   final optionsFile = File('lib/firebase_options.dart');
   if (!optionsFile.existsSync()) return false;
@@ -15,243 +17,216 @@ bool firebaseOptionsMatchPackage(String packageName) {
       content.contains('iosBundleId: "$packageName"');
 }
 
-/// Creates a new Firebase project or uses an existing one.
-///
-/// This function guides the user through the process of setting up a Firebase
-/// project for a given client. It checks for a logged-in Firebase user,
-/// lists existing projects, and prompts the user to either use an existing
-/// project or create a new one if a project with the specified [firebaseProjectId]
-/// already exists.
-///
-/// [clientId] The ID of the client for which the Firebase project is being created.
-/// [packageName] The package name of the application.
-/// [firebaseProjectId] The desired Firebase project ID.
-///
-/// Throws an [Exception] if no user is logged in to Firebase CLI, if retrieving
-/// project lists fails, or if the user provides an empty new project ID.
+/// Uses an existing Firebase project or creates it with the selected identity.
 Future<void> createFirebaseProject({
   required String clientId,
   required String packageName,
   required String firebaseProjectId,
+  String? firebaseServiceAccount,
 }) async {
-  try {
-    // Step 1: Get the logged-in user
-    logger.i('🔍 Checking logged-in Firebase user...');
-    final userResult = await Process.run('firebase', ['login:list', '--json']);
-    if (userResult.exitCode != 0) {
-      throw Exception('❌ Failed to retrieve Firebase user info.');
-    }
-
-    final userData = jsonDecode(userResult.stdout) as Map<String, dynamic>;
-    if (userData['status'] != 'success' ||
-        (userData['result'] as List).isEmpty) {
-      throw Exception('❌ No user is logged in to Firebase CLI.');
-    }
-
-    final loggedInUser = userData['result'][0]['user'] as Map<String, dynamic>;
-    final userEmail = loggedInUser['email'];
-    logger.i('👤 Logged in as: $userEmail');
-
-    // Step 2: Get the list of Firebase projects
-    logger.i('🔍 Fetching the list of Firebase projects...');
-    final projectsResult = await Process.run('firebase', [
-      'projects:list',
-      '--json',
-    ]);
-    if (projectsResult.exitCode != 0) {
-      throw Exception('❌ Failed to retrieve the list of Firebase projects.');
-    }
-
-    final projectsJson =
-        jsonDecode(projectsResult.stdout) as Map<String, dynamic>;
-    final projectsData = projectsJson['results'] as List<dynamic>?;
-
-    if (projectsData == null || projectsData.isEmpty) {
-      logger.i('📋 No existing Firebase projects found.');
-    } else {
-      logger.i('📋 Current Firebase projects:');
-      for (final project in projectsData) {
-        logger.i(
-          '   - ${project['projectId']} (${project['displayName']}) by ${project['projectOwner'] ?? 'Unknown'}',
-        );
-      }
-    }
-
-    // Step 3: Check if a project with the same ID exists
-    final existingProject = projectsData?.firstWhere(
-      (project) => project['projectId'] == firebaseProjectId,
-      orElse: () => null,
-    );
-
-    if (existingProject != null) {
-      // Prompt user to decide whether to use the existing project
-      logger.i(
-        '⚠️ A project with the ID "$firebaseProjectId" already exists (Display Name: ${existingProject['displayName']}).',
+  if (firebaseProjectId.isEmpty) return;
+  final credentialPath = resolveFirebaseServiceAccount(
+    reference: firebaseServiceAccount,
+  );
+  await withFirebaseServiceAccount<void>(
+    credentialPath: credentialPath,
+    operation: (environment) async {
+      final projectsResult = await Process.run(
+        'firebase',
+        ['projects:list', '--json'],
+        environment: environment,
+        runInShell: true,
       );
-      final choice = prompt('Do you want to use this existing project? (y/n):');
-
-      if (choice.toLowerCase() == 'y') {
-        logger.i('✅ Using existing project: $firebaseProjectId');
-        return;
-      } else {
-        logger.i(
-          '🔄 You chose not to use the existing project. Please provide a new project ID.',
+      if (projectsResult.exitCode != 0) {
+        throw CustomException(
+          'Cannot list Firebase projects. Check Firebase CLI installation '
+          'and your selected credential permissions.',
         );
-        final newProjectId = prompt(
-          'Enter a new Firebase Project ID (e.g., my-new-project):',
-        );
-        if (newProjectId.isEmpty) {
-          throw Exception('❌ Project ID cannot be empty.');
-        }
-        firebaseProjectId = newProjectId;
       }
-    }
-
-    // Step 4: Create a new Firebase project
-    final displayName = '${toTitleCase(clientId)}-HR-Flutter';
-    logger.i('🚀 Creating Firebase project: $firebaseProjectId...');
-    await runCommand(
-      'firebase',
-      ['projects:create', '--display-name', displayName, firebaseProjectId],
-      successMessage:
-          '✅ Firebase project created successfully: $firebaseProjectId',
-    );
-  } catch (e) {
-    logger.e('❌ Error during Firebase project creation: $e');
-  }
+      final Object? response;
+      try {
+        response = jsonDecode(projectsResult.stdout as String);
+      } on FormatException {
+        throw CustomException('Firebase returned an invalid project list.');
+      }
+      if (response is! Map ||
+          response['status'] != 'success' ||
+          response['result'] is! List) {
+        throw CustomException('Firebase returned an invalid project list.');
+      }
+      final projects = response['result'] as List;
+      if (projects.any(
+        (project) =>
+            project is Map && project['projectId'] == firebaseProjectId,
+      )) {
+        logger.i('✅ Using existing Firebase project: $firebaseProjectId');
+        return;
+      }
+      final result = await Process.run(
+        'firebase',
+        [
+          'projects:create',
+          firebaseProjectId,
+          '--display-name',
+          toTitleCase(clientId),
+          '--json',
+        ],
+        environment: environment,
+        runInShell: true,
+      );
+      if (result.exitCode != 0) {
+        throw CustomException(
+          'Cannot create Firebase project $firebaseProjectId. '
+          'Create it first or grant project-creation permission '
+          'to the selected identity.',
+        );
+      }
+      logger.i('✅ Firebase project created: $firebaseProjectId');
+    },
+  );
 }
 
-/// Adds Firebase to a Flutter application using the FlutterFire CLI.
+/// Restores saved Firebase files or configures and caches a clone once.
 ///
-/// This function configures Firebase for the Android and iOS platforms
-/// of the Flutter application. It first checks the `firebase.json` file
-/// to see if the provided [firebaseProjectId] matches an existing configuration.
-/// If not, it prompts the user for confirmation to proceed.
-///
-/// It then activates the `flutterfire_cli` globally and runs the `flutterfire configure`
-/// command to integrate Firebase with the app.
-///
-/// [firebaseProjectId] The ID of the Firebase project to link with the app.
-/// [packageName] The package name (Android application ID and iOS bundle ID) of the app.
-/// [skip] If `true`, prompts for re-running configuration will be skipped.
-///
-/// Throws an [Exception] if `firebase.json` is not found or invalid,
-/// or if the `flutterfire` commands fail.
+/// A refresh runs FlutterFire online. Skipping online setup still requires
+/// matching saved or active configuration, preventing another clone's files
+/// from reaching a build. Private service-account credentials stay external.
 Future<void> addFirebaseToApp({
+  required String clientId,
   required String firebaseProjectId,
   required String packageName,
-  bool? skip,
+  String? firebaseServiceAccount,
+  bool skip = false,
+  bool refresh = false,
+  Future<ProcessResult> Function(List<String>, Map<String, String>?)?
+  configureCommand,
 }) async {
-  if (firebaseProjectId.isEmpty) {
-    logger.i('>>| Skipping Firebase configuration (empty firebaseProjectId).');
-    return;
+  if (firebaseProjectId.isEmpty) return;
+  if (skip && refresh) {
+    throw CustomException(
+      'Cannot combine --refreshFirebase with --skipFirebaseConfigure.',
+    );
+  }
+  final firebaseJsonPath = clonifySettings.firebaseSettingsFilePath;
+  final optionsFile = File('lib/firebase_options.dart');
+  final usesFunctionAccessor =
+      optionsFile.existsSync() &&
+      RegExp(
+        r'static\s+FirebaseOptions\s+currentPlatform\s*\(',
+      ).hasMatch(optionsFile.readAsStringSync());
+
+  void preserveAccessor() {
+    if (!usesFunctionAccessor || !optionsFile.existsSync()) return;
+    final options = optionsFile.readAsStringSync();
+    final updated = options.replaceFirst(
+      RegExp(r'static\s+FirebaseOptions\s+get\s+currentPlatform\b'),
+      'static FirebaseOptions currentPlatform()',
+    );
+    if (updated != options) optionsFile.writeAsStringSync(updated);
   }
 
-  final firebaseJsonPath = clonifySettings.firebaseSettingsFilePath;
-
-  try {
-    // Step 1: Parse the firebase.json file
-    logger.i('🔍 Checking for firebase.json in the project root...');
-    final firebaseJsonFile = File(firebaseJsonPath);
-    if (!firebaseJsonFile.existsSync()) {
-      logger.e('❌ No firebase.json file found in the project root.');
-      logger.i('  Please run "firebase init" to add Firebase to your app.');
+  if (!refresh) {
+    if (restoreFirebaseConfiguration(
+      clientId: clientId,
+      firebaseProjectId: firebaseProjectId,
+      packageName: packageName,
+      firebaseSettingsFilePath: firebaseJsonPath,
+    )) {
+      preserveAccessor();
+      logger.i('✅ Restored saved Firebase configuration for $clientId.');
       return;
     }
-
-    final firebaseJsonContent =
-        jsonDecode(firebaseJsonFile.readAsStringSync()) as Map<String, dynamic>;
-
-    // Step 2: Check if the project ID matches
-    final flutterPlatforms = firebaseJsonContent['flutter']?['platforms'];
-    if (flutterPlatforms == null) {
-      logger.e('❌ No platforms found in firebase.json.');
-      logger.i('  Please run "firebase init" to add Firebase to your app.');
+    var currentConfigurationMatches = false;
+    try {
+      assertFirebaseConfiguration(
+        firebaseProjectId,
+        packageName,
+        firebaseSettingsFilePath: firebaseJsonPath,
+      );
+      currentConfigurationMatches = true;
+    } on CustomException {
+      // First setup or another clone is currently selected.
+    }
+    if (currentConfigurationMatches) {
+      saveFirebaseConfiguration(
+        clientId: clientId,
+        firebaseProjectId: firebaseProjectId,
+        packageName: packageName,
+        firebaseSettingsFilePath: firebaseJsonPath,
+      );
+      logger.i('✅ Saved existing Firebase configuration for $clientId.');
       return;
     }
+  }
 
-    bool projectIdMatches = false;
+  if (skip) {
+    throw CustomException(
+      'No matching saved Firebase configuration for $clientId. '
+      'Run configure without --skipFirebaseConfigure once to set it up.',
+    );
+  }
 
-    for (final platform in flutterPlatforms.entries) {
-      final platformData = platform.value as Map<String, dynamic>;
-      if (platformData['default']?['projectId'] == firebaseProjectId) {
-        projectIdMatches = true;
-        logger.i(
-          '✅ Firebase project ID matches for platform: ${platform.key} (${platformData['default']?['projectId']})',
-        );
-      }
-    }
-
-    final packageMatches = firebaseOptionsMatchPackage(packageName);
-
-    if (projectIdMatches && packageMatches) {
-      if (skip == false) {
-        final userChoice = prompt(
-          'Firebase project ID and package already match. Do you want to re-run the command anyway? (y/n):',
-        );
-        if (userChoice.toLowerCase() != 'y') {
-          logger.i('>>| Skipping Firebase configuration...');
-          return;
-        }
-      } else {
-        logger.i(
-          '✅ Firebase project ID and package match the current configuration.\n>>| Skipping Firebase configuration...',
-        );
-        return;
-      }
-    } else if (projectIdMatches && !packageMatches) {
-      logger.i(
-        '🔄 Firebase project matches but package differs (need $packageName). Re-running FlutterFire configure...',
-      );
-    } else {
-      logger.e(
-        '❌ Firebase project ID does not match any configuration in firebase.json.',
-      );
-      if (skip == false) {
-        final userChoice = prompt(
-          'Do you want to proceed with Firebase configuration for project ID: $firebaseProjectId? (y/n):',
-        );
-        if (userChoice.toLowerCase() != 'y') {
-          logger.i('🚀 Skipping Firebase configuration...');
-          return;
-        }
-      } else {
-        logger.i(
-          '>>| Proceeding with Firebase configuration for project ID: $firebaseProjectId...',
-        );
-      }
-    }
-
-    // Step 3: Activate Flutterfire CLI
-    logger.i('🛠 Activating Flutterfire CLI...');
-    await runCommand('dart', [
-      'pub',
-      'global',
-      'activate',
-      'flutterfire_cli',
-    ], successMessage: '✅ Flutterfire CLI activated successfully.');
-
-    // Step 4: Add Firebase to Android and iOS
-    logger.i('🛠 Adding Firebase to your Flutter app...');
-    await runCommand(
-      'flutterfire',
-      [
+  final credentialPath = resolveFirebaseServiceAccount(
+    reference: firebaseServiceAccount,
+  );
+  logger.i(
+    '🔥 Setting up Firebase project $firebaseProjectId for $clientId...',
+  );
+  await withFirebaseServiceAccount<void>(
+    credentialPath: credentialPath,
+    operation: (environment) async {
+      final arguments = <String>[
         'configure',
         '--project',
         firebaseProjectId,
-        '-y',
+        '--yes',
         '--platforms',
         'android,ios',
-        '-i',
+        '--ios-bundle-id',
         packageName,
-        '-a',
+        '--android-package-name',
         packageName,
-      ],
-      successMessage: '✅ Firebase added successfully to your Flutter app.',
-    );
-
-    logger.i("[!] Don't forget to upload the APNs key to Firebase Console [!]");
-  } catch (e) {
-    logger.e('❌ Error during Firebase setup: $e');
-  }
+        if (credentialPath != null) ...['--service-account', credentialPath],
+      ];
+      final ProcessResult result;
+      try {
+        result = await (configureCommand ?? runFlutterFireConfigure)(
+          arguments,
+          environment,
+        );
+      } on ProcessException {
+        throw CustomException(
+          'FlutterFire could not start. Install Firebase CLI and '
+          'dart pub global activate flutterfire_cli once on this computer.',
+        );
+      }
+      if (result.exitCode != 0) {
+        throw CustomException(
+          'FlutterFire configuration failed (exit ${result.exitCode}). '
+          'Check access to project $firebaseProjectId and your Firebase tools. '
+          'Saved configuration has not been replaced.',
+        );
+      }
+    },
+  );
+  preserveAccessor();
+  syncFlutterFireMetadata(firebaseSettingsFilePath: firebaseJsonPath);
+  saveFirebaseConfiguration(
+    clientId: clientId,
+    firebaseProjectId: firebaseProjectId,
+    packageName: packageName,
+    firebaseSettingsFilePath: firebaseJsonPath,
+  );
+  logger.i('✅ Firebase configuration saved for $clientId.');
 }
+
+/// Runs FlutterFire without changing the developer's saved Firebase login.
+Future<ProcessResult> runFlutterFireConfigure(
+  List<String> arguments,
+  Map<String, String>? environment,
+) => Process.run(
+  'flutterfire',
+  arguments,
+  environment: environment,
+  runInShell: true,
+);

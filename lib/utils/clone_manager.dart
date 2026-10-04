@@ -627,9 +627,13 @@ Future<bool> _performInitialSetup(
           '🔥 Configuring Firebase for $firebaseProjectId...',
         );
         await addFirebaseToApp(
+          clientId: callModel.clientId!,
           packageName: configJson['packageName'],
           firebaseProjectId: firebaseProjectId,
-          skip: callModel.skipAll || callModel.skipFirebaseConfigure,
+          firebaseServiceAccount:
+              configJson['firebaseServiceAccount'] as String?,
+          skip: callModel.skipFirebaseConfigure,
+          refresh: callModel.refreshFirebase,
         );
         firebaseProgress?.complete('Firebase configured successfully');
       }
@@ -974,28 +978,35 @@ Future<Map<String, dynamic>?> configureApp(
     final configJson = await parseConfigFile(callModel.clientId!);
     assertConfigureReady(callModel.clientId!, configJson);
 
-    return await runConfigureTransaction(() async {
-      await _performInitialSetup(callModel, configJson);
+    return await runConfigureTransaction(
+      () async {
+        await _performInitialSetup(callModel, configJson);
 
-      final finalVersion = await _handleVersionManagement(
-        callModel,
-        configJson,
-      );
-      if (finalVersion == null) {
-        throw CustomException('Version update failed');
-      }
+        final finalVersion = await _handleVersionManagement(
+          callModel,
+          configJson,
+        );
+        if (finalVersion == null) {
+          throw CustomException('Version update failed');
+        }
 
-      if (!await _configureLauncherIconsAndSplashScreen(configJson)) {
-        throw CustomException('Launcher icon or splash screen update failed');
-      }
+        if (!await _configureLauncherIconsAndSplashScreen(configJson)) {
+          throw CustomException('Launcher icon or splash screen update failed');
+        }
 
-      await generateCloneConfigFile(CloneConfigModel.fromJson(configJson));
-      await applyCloneNativeConfig(callModel.clientId!, configJson);
-      assertConfigureFinished(callModel.clientId!, configJson);
-      saveLastClientId(callModel.clientId!);
-      logger.i('✅ Configure finished for ${callModel.clientId}');
-      return configJson;
-    });
+        await generateCloneConfigFile(CloneConfigModel.fromJson(configJson));
+        await applyCloneNativeConfig(callModel.clientId!, configJson);
+        assertConfigureFinished(callModel.clientId!, configJson);
+        saveLastClientId(callModel.clientId!);
+        logger.i('✅ Configure finished for ${callModel.clientId}');
+        return configJson;
+      },
+      roots: {
+        ...configureMutableRoots,
+        if (clonifySettings.firebaseEnabled)
+          clonifySettings.firebaseSettingsFilePath,
+      },
+    );
   } on ConfigureRolledBackException catch (error) {
     logger.e('❌ ${error.message}');
     logger.i('↩️  Restored previous iOS, Android, and project files.');
