@@ -30,10 +30,9 @@ Future<void> applyAndroidNotificationIcon(
   String clientId,
   Map<String, dynamic> configJson,
 ) async {
-  final configuredIcon =
-      (configJson[notificationIconConfigKey] as String?)?.trim();
-  final iconFileName =
-      (configuredIcon != null && configuredIcon.isNotEmpty)
+  final configuredIcon = (configJson[notificationIconConfigKey] as String?)
+      ?.trim();
+  final iconFileName = (configuredIcon != null && configuredIcon.isNotEmpty)
       ? configuredIcon
       : defaultNotificationIconFileName;
 
@@ -46,15 +45,11 @@ Future<void> applyAndroidNotificationIcon(
         'Missing $notificationIconConfigKey at ${source.path}',
       );
     }
-    logger.i(
-      'ℹ️  No Android notification icon at ${source.path}; skipped.',
-    );
+    logger.i('ℹ️  No Android notification icon at ${source.path}; skipped.');
     return;
   }
 
-  final resRoot = Directory(
-    p.join(Constants.androidMainDirPath, 'res'),
-  );
+  final resRoot = Directory(p.join(Constants.androidMainDirPath, 'res'));
   if (!resRoot.existsSync()) {
     throw CustomException(
       '${resRoot.path} not found; cannot sync Android notification icon.',
@@ -68,9 +63,7 @@ Future<void> applyAndroidNotificationIcon(
     source.copySync(target.path);
   }
 
-  logger.i(
-    '✅ Android notification icon synced from ${source.path}',
-  );
+  logger.i('✅ Android notification icon synced from ${source.path}');
 
   final tint = resolveBackgroundNotificationColor(configJson);
   if (tint != null) {
@@ -120,9 +113,7 @@ String? notificationColorArgbLiteral(String colorValue) {
 Future<void> applyAndroidNotificationColor(String colorValue) async {
   final hex = notificationColorHexFromPrimary(colorValue);
   if (hex == null) {
-    logger.w(
-      '⚠️  Could not parse notification tint "$colorValue".',
-    );
+    logger.w('⚠️  Could not parse notification tint "$colorValue".');
     return;
   }
 

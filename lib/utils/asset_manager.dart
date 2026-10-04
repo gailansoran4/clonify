@@ -52,7 +52,7 @@ void replaceAssets(String clientId) {
 /// Creates an assets directory for a new clone and copies default assets into it.
 ///
 /// This function first creates the `./clonify/clones/[clientId]/assets` directory.
-/// Then, it copies a predefined set of assets (specified in `clonifySettings.assets`)
+/// Then, it copies a predefined set of assets (specified in `currentClonifySettings().assets`)
 /// from the main project's `./assets/images` directory into the new clone's
 /// asset directory.
 ///

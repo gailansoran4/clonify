@@ -1,6 +1,8 @@
 // Package Rename Plus
 
 import 'dart:io';
+import 'dart:convert';
+import 'shorebird_manager.dart';
 
 import 'package:clonify/constants.dart';
 import 'package:clonify/models/clonify_settings_model.dart';
@@ -21,6 +23,8 @@ String shortIosBundleName(String appName) {
 
 /// Reads the currently configured package name from generated clone config.
 String? readCurrentPackageName() {
+  final nativePackage = readAndroidApplicationId() ?? readIosBundleId();
+  if (nativePackage != null) return nativePackage;
   final cloneConfigFile = File('./lib/generated/clone_configs.dart');
   if (cloneConfigFile.existsSync()) {
     final content = cloneConfigFile.readAsStringSync();
@@ -69,10 +73,7 @@ Future<void> runRenamePackage({
   final renameConfigFile = File(Constants.packageRenameConfigFileName);
   final shortBundleName = shortIosBundleName(appName);
   final oldPackageName = readCurrentPackageName();
-  final overrideOldPackage =
-      oldPackageName != null && oldPackageName != packageName
-      ? oldPackageName
-      : null;
+  final overrideOldPackage = oldPackageName;
 
   logger.i('✅ Loading ${Constants.packageRenameConfigFileName}...');
   try {
@@ -112,11 +113,12 @@ Future<void> runRenamePackage({
         'android',
         'package_name',
       ], packageName);
-      yamlEditor.update([
-        'package_rename_config',
-        'android',
-        'language',
-      ], 'kotlin');
+      yamlEditor.update(
+        ['package_rename_config', 'android', 'language'],
+        Directory('android/app/src/main/kotlin').existsSync()
+            ? 'kotlin'
+            : 'java',
+      );
       _updateOptionalKey(yamlEditor, [
         'package_rename_config',
         'android',
@@ -159,7 +161,7 @@ Future<void> runRenamePackage({
 
     renameConfigFile.writeAsStringSync(yamlEditor.toString());
     logger.i(
-      '✅ Updated ${Constants.packageRenameConfigFileName} with app name "$appName" and package name "$packageName".',
+      '✅ Updated ${Constants.packageRenameConfigFileName} with app name ${jsonEncode(appName)} and package name "$packageName".',
     );
   } catch (e) {
     logger.e('❌ YAML update error: $e');
@@ -170,7 +172,17 @@ Future<void> runRenamePackage({
 
   try {
     final args = <String>['--path', Constants.packageRenameConfigFileName];
-    package_rename.set(args);
+    package_rename.set(
+      args,
+      platforms: {
+        if (clonifySettings.updateAndroidInfo) 'android',
+        if (clonifySettings.updateIOSInfo) 'ios',
+        'web',
+        'linux',
+        'windows',
+        'macos',
+      },
+    );
     logger.i('✅ Successfully renamed the package and app.');
   } catch (e) {
     logger.e('❌ Error during package renaming process: $e');
@@ -248,7 +260,7 @@ String _buildRenameConfigYaml({
 
   if (clonifySettings.updateAndroidInfo) {
     buffer.write('  android:\n');
-    buffer.write('    app_name: "$appName"\n');
+    buffer.write('    app_name: ${jsonEncode(appName)}\n');
     buffer.write('    package_name: "$packageName"\n');
     buffer.write('    language: kotlin\n');
     if (overrideOldPackage != null) {
@@ -258,8 +270,8 @@ String _buildRenameConfigYaml({
 
   if (clonifySettings.updateIOSInfo) {
     buffer.write('  ios:\n');
-    buffer.write('    app_name: "$appName"\n');
-    buffer.write('    bundle_name: "$shortBundleName"\n');
+    buffer.write('    app_name: ${jsonEncode(appName)}\n');
+    buffer.write('    bundle_name: ${jsonEncode(shortBundleName)}\n');
     buffer.write('    package_name: "$packageName"\n');
     if (overrideOldPackage != null) {
       buffer.write('    override_old_package: "$overrideOldPackage"\n');
@@ -267,13 +279,13 @@ String _buildRenameConfigYaml({
   }
 
   buffer.write('  web:\n');
-  buffer.write('    app_name: "$appName"\n');
-  buffer.write('    short_app_name: "$shortBundleName"\n');
-  buffer.write('    description: "$appName"\n');
+  buffer.write('    app_name: ${jsonEncode(appName)}\n');
+  buffer.write('    short_app_name: ${jsonEncode(shortBundleName)}\n');
+  buffer.write('    description: ${jsonEncode(appName)}\n');
   buffer.write('  linux:\n');
-  buffer.write('    app_name: "$appName"\n');
+  buffer.write('    app_name: ${jsonEncode(appName)}\n');
   buffer.write('  windows:\n');
-  buffer.write('    app_name: "$appName"\n');
+  buffer.write('    app_name: ${jsonEncode(appName)}\n');
 
   return buffer.toString();
 }
@@ -290,7 +302,7 @@ String _mapToYaml(Map<String, dynamic> map, {int indent = 0}) {
         _mapToYaml(Map<String, dynamic>.from(value), indent: indent + 2),
       );
     } else {
-      buffer.writeln('$prefix${entry.key}: "$value"');
+      buffer.writeln('$prefix${entry.key}: ${jsonEncode(value)}');
     }
   }
 

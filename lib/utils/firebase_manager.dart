@@ -5,6 +5,7 @@ import 'dart:io';
 
 import '../custom_exceptions.dart';
 import 'clonify_helpers.dart';
+import 'command_process.dart';
 import 'firebase_config_cache.dart';
 import 'firebase_credentials.dart';
 
@@ -31,11 +32,11 @@ Future<void> createFirebaseProject({
   await withFirebaseServiceAccount<void>(
     credentialPath: credentialPath,
     operation: (environment) async {
-      final projectsResult = await Process.run(
+      final projectsResult = await executeCommand(
         'firebase',
         ['projects:list', '--json'],
         environment: environment,
-        runInShell: true,
+        checkExitCode: false,
       );
       if (projectsResult.exitCode != 0) {
         throw CustomException(
@@ -62,7 +63,7 @@ Future<void> createFirebaseProject({
         logger.i('✅ Using existing Firebase project: $firebaseProjectId');
         return;
       }
-      final result = await Process.run(
+      final result = await executeCommand(
         'firebase',
         [
           'projects:create',
@@ -72,7 +73,7 @@ Future<void> createFirebaseProject({
           '--json',
         ],
         environment: environment,
-        runInShell: true,
+        checkExitCode: false,
       );
       if (result.exitCode != 0) {
         throw CustomException(
@@ -107,7 +108,7 @@ Future<void> addFirebaseToApp({
       'Cannot combine --refreshFirebase with --skipFirebaseConfigure.',
     );
   }
-  final firebaseJsonPath = clonifySettings.firebaseSettingsFilePath;
+  final firebaseJsonPath = currentClonifySettings().firebaseSettingsFilePath;
   final optionsFile = File('lib/firebase_options.dart');
   final usesFunctionAccessor =
       optionsFile.existsSync() &&
@@ -224,9 +225,9 @@ Future<void> addFirebaseToApp({
 Future<ProcessResult> runFlutterFireConfigure(
   List<String> arguments,
   Map<String, String>? environment,
-) => Process.run(
+) => executeCommand(
   'flutterfire',
   arguments,
   environment: environment,
-  runInShell: true,
+  checkExitCode: false,
 );

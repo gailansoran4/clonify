@@ -15,11 +15,13 @@ void _setIOSConfigurations(dynamic iosConfig) {
     );
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
-    PackageRenamePlusLogger.error('Skipping iOS configuration!!!');
+    PackageRenamePlusLogger.error('iOS configuration failed.');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
-    PackageRenamePlusLogger.error('Skipping iOS configuration!!!');
+    PackageRenamePlusLogger.error('iOS configuration failed.');
+    rethrow;
   } finally {
     if (iosConfig != null) PackageRenamePlusLogger.warning(_majorTaskDoneLine);
   }
@@ -38,7 +40,7 @@ void _setIOSDisplayName(dynamic appName) {
     final iosInfoPlistString = iosInfoPlistFile.readAsStringSync();
     final newDisplayNameIOSInfoPlistString = iosInfoPlistString.replaceAll(
       RegExp(r'<key>CFBundleDisplayName</key>\s*<string>(.*?)</string>'),
-      '<key>CFBundleDisplayName</key>\n\t<string>$appName</string>',
+      '<key>CFBundleDisplayName</key>\n\t<string>${_xmlText(appName)}</string>',
     );
 
     iosInfoPlistFile.writeAsStringSync(newDisplayNameIOSInfoPlistString);
@@ -48,7 +50,7 @@ void _setIOSDisplayName(dynamic appName) {
       final iosProjectString = iosProjectFile.readAsStringSync();
       final updatedProjectString = iosProjectString.replaceAll(
         RegExp(r'INFOPLIST_KEY_CFBundleDisplayName = ".*?";'),
-        'INFOPLIST_KEY_CFBundleDisplayName = "$appName";',
+        'INFOPLIST_KEY_CFBundleDisplayName = ${jsonEncode(appName)};',
       );
       iosProjectFile.writeAsStringSync(updatedProjectString);
       PackageRenamePlusLogger.info(
@@ -62,10 +64,12 @@ void _setIOSDisplayName(dynamic appName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('iOS Display Name change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('iOS Display Name change failed!!!');
+    rethrow;
   } finally {
     if (appName != null) PackageRenamePlusLogger.warning(_minorTaskDoneLine);
   }
@@ -90,7 +94,7 @@ void _setIOSBundleName(dynamic bundleName) {
     final iosInfoPlistString = iosInfoPlistFile.readAsStringSync();
     final newBundleNameIOSInfoPlistString = iosInfoPlistString.replaceAll(
       RegExp(r'<key>CFBundleName</key>\s*<string>(.*?)</string>'),
-      '<key>CFBundleName</key>\n\t<string>$bundleName</string>',
+      '<key>CFBundleName</key>\n\t<string>${_xmlText(bundleName)}</string>',
     );
 
     iosInfoPlistFile.writeAsStringSync(newBundleNameIOSInfoPlistString);
@@ -101,10 +105,12 @@ void _setIOSBundleName(dynamic bundleName) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('iOS Bundle Name change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('iOS Bundle Name change failed!!!');
+    rethrow;
   } finally {
     if (bundleName != null) PackageRenamePlusLogger.warning(_minorTaskDoneLine);
   }
@@ -121,30 +127,25 @@ void _setIOSPackageName({dynamic oldPackageName, dynamic packageName}) {
     }
 
     final iosProjectString = iosProjectFile.readAsStringSync();
-    final escapedOldPackageName = oldPackageName is String
-        ? RegExp.escape(oldPackageName)
-        : r'[^;\s]+';
-    final newBundleIDIOSProjectString = iosProjectString
-        .replaceAll(
-          RegExp(
-            'PRODUCT_BUNDLE_IDENTIFIER = $escapedOldPackageName(?<!\\.RunnerTests);',
-          ),
-          'PRODUCT_BUNDLE_IDENTIFIER = $packageName;',
-        )
-        .replaceAllMapped(
-          RegExp(
-            'PRODUCT_BUNDLE_IDENTIFIER = $escapedOldPackageName\\.([A-Za-z0-9.-_]+);',
-          ),
-          (match) {
-            final extensionName = match.group(1);
-            final isContains = packageName.contains(extensionName.toString());
-            if (isContains) {
-              return 'PRODUCT_BUNDLE_IDENTIFIER = $packageName;';
-            } else {
-              return 'PRODUCT_BUNDLE_IDENTIFIER = $packageName.$extensionName;';
-            }
-          },
-        );
+    final newBundleIDIOSProjectString = iosProjectString.replaceAllMapped(
+      RegExp(r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*"?([^;"\s]+)"?;'),
+      (match) {
+        final current = match[1]!;
+        if (oldPackageName is String) {
+          if (current == oldPackageName) {
+            return 'PRODUCT_BUNDLE_IDENTIFIER = $packageName;';
+          }
+          if (current.startsWith('$oldPackageName.')) {
+            return 'PRODUCT_BUNDLE_IDENTIFIER = $packageName${current.substring(oldPackageName.length)};';
+          }
+          return match[0]!;
+        }
+        if (current.endsWith('.RunnerTests')) {
+          return 'PRODUCT_BUNDLE_IDENTIFIER = $packageName.RunnerTests;';
+        }
+        return 'PRODUCT_BUNDLE_IDENTIFIER = $packageName;';
+      },
+    );
 
     iosProjectFile.writeAsStringSync(newBundleIDIOSProjectString);
 
@@ -154,10 +155,12 @@ void _setIOSPackageName({dynamic oldPackageName, dynamic packageName}) {
   } on _PackageRenameException catch (e) {
     PackageRenamePlusLogger.error('${e.message}ERR Code: ${e.code}');
     PackageRenamePlusLogger.error('iOS Bundle Identifier change failed!!!');
+    rethrow;
   } catch (e) {
     PackageRenamePlusLogger.warning(e.toString());
     PackageRenamePlusLogger.error('ERR Code: 255');
     PackageRenamePlusLogger.error('iOS Bundle Identifier change failed!!!');
+    rethrow;
   } finally {
     if (packageName != null) {
       PackageRenamePlusLogger.warning(_minorTaskDoneLine);

@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'dart:convert';
+import 'command_process.dart';
 
 import 'package:clonify/models/clonify_settings_model.dart';
 import 'package:clonify/src/clonify_core.dart';
@@ -9,42 +10,16 @@ import 'package:clonify/utils/clone_manager.dart';
 import 'package:clonify/utils/tui_helpers.dart';
 import 'package:logger/logger.dart';
 
-// Future<void> runParallelCommands(
-//   List<Future<void> Function()> commands,
-//   List<String> loadingMessages,
-// ) async {
-//   if (commands.length != loadingMessages.length) {
-//     throw ArgumentError(
-//         'Commands and loading messages must have the same length.');
-//   }
-//   // Create progress indicators for all commands
-//   final tasks = List.generate(commands.length, (index) {
-//     final stopwatch = Stopwatch()..start();
-//     final progress =
-//         Stream.periodic(const Duration(milliseconds: 100), (count) {
-//       return "🛠 ${loadingMessages[index]} [${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s]";
-//     });
-//     final progressSubscription = progress.listen((message) {
-//       stdout.write('\r$message');
-//     });
-//     // Run the command
-//     return commands[index]().whenComplete(() {
-//       progressSubscription.cancel();
-//       stdout.write('\r'); // Clear the line
-//       logger.i(
-//           "✅ ${loadingMessages[index]} completed in ${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(2)}s.");
-//       stopwatch.stop();
-//     });
-//   });
-//   await Future.wait(tasks); // Wait for all commands to finish
-// }
-
 final Logger logger = Logger(
   filter: ProductionFilter(),
-  printer: PrettyPrinter(methodCount: 0, noBoxingByDefault: true),
+  printer: PrettyPrinter(
+    methodCount: 0,
+    noBoxingByDefault: true,
+    colors: isTUIEnabled() && stdout.hasTerminal,
+  ),
 );
 
-final ClonifySettings clonifySettings = getClonifySettings();
+ClonifySettings currentClonifySettings() => getClonifySettings();
 
 /// Sanitizes a command-line argument to prevent command injection vulnerabilities.
 ///
@@ -76,21 +51,7 @@ String sanitizeArg(String arg) {
   return arg;
 }
 
-/// Executes a shell command with optional loading indicators and error handling.
-///
-/// This function sanitizes the [command] and [args] to prevent command injection.
-/// It can display a progress indicator while the command is running and
-/// logs success or error messages upon completion.
-///
-/// [command] The executable command to run (e.g., 'flutter', 'dart').
-/// [args] A list of string arguments to pass to the command.
-/// [successMessage] An optional message to display on successful command execution.
-/// [showLoading] If `true`, a loading indicator with elapsed time will be shown. Defaults to `true`.
-/// [loadingMessage] An optional custom message to display during loading.
-/// [workingDirectory] The directory in which to run the command. If `null`, the current
-///                    working directory of the process is used.
-///
-/// Throws an [Exception] if the command fails (returns a non-zero exit code).
+/// Runs a tool and propagates failures to the caller's transaction.
 Future<void> runCommand(
   String command,
   List<String> args, {
@@ -99,79 +60,21 @@ Future<void> runCommand(
   String? loadingMessage,
   String? workingDirectory,
 }) async {
-  // Sanitize command and arguments
-  final sanitizedCommand = sanitizeArg(command);
-  final sanitizedArgs = args.map(sanitizeArg).toList();
-  final sanitizedWorkingDirectory = workingDirectory != null
-      ? sanitizeArg(workingDirectory)
+  final progress = showLoading
+      ? progressWithTUI(loadingMessage ?? 'Running $command...')
       : null;
-
-  if (showLoading) {
-    final stopwatch = Stopwatch()..start();
-    String fullCommand = '$sanitizedCommand ${sanitizedArgs.join(" ")}';
-    if (fullCommand.length > 50) {
-      fullCommand =
-          '$sanitizedCommand ${sanitizedArgs.join(" ").substring(0, 50)}...';
-    }
-    final progress = Stream.periodic(const Duration(milliseconds: 100), (
-      count,
-    ) {
-      return loadingMessage != null
-          ? "🛠 $loadingMessage [${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s]"
-          : "🛠 Running $fullCommand [${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)}s]";
-    });
-
-    // Print progress indicator in a loop
-    final progressSubscription = progress.listen((message) {
-      stdout.write('\r$message'); // Overwrite the same line in the terminal
-    });
-
-    try {
-      final result = await Process.run(
-        sanitizedCommand,
-        sanitizedArgs,
-        runInShell: true,
-        workingDirectory: sanitizedWorkingDirectory,
-      );
-      progressSubscription.cancel(); // Stop the progress indicator
-      stdout.write('\r'); // Clear the line
-
-      if (result.exitCode == 0) {
-        stopwatch.stop();
-        logger.i(
-          successMessage != null
-              ? "$successMessage ${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(2)}s"
-              : '✅ Command completed in ${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(2)}s.',
-        );
-      } else {
-        throw Exception(
-          '❌ Command failed: $sanitizedCommand ${sanitizedArgs.join(" ")}\nError: ${result.stderr}',
-        );
-      }
-    } catch (e) {
-      progressSubscription.cancel();
-      stdout.write('\r'); // Clear the line
-      logger.e(e);
-    }
-  } else {
-    try {
-      final result = await Process.run(
-        sanitizedCommand,
-        sanitizedArgs,
-        runInShell: true,
-        workingDirectory: sanitizedWorkingDirectory,
-      );
-
-      if (result.exitCode == 0) {
-        logger.i('\r${successMessage ?? '✅ Command completed successfully.'}');
-      } else {
-        throw Exception(
-          '❌ Command failed: $sanitizedCommand ${sanitizedArgs.join(" ")}\nError: ${result.stderr}',
-        );
-      }
-    } catch (e) {
-      logger.e(e);
-    }
+  try {
+    await executeCommand(
+      command,
+      args,
+      workingDirectory: workingDirectory,
+      inheritStdio: true,
+    );
+    progress?.complete(successMessage ?? '$command completed');
+    if (progress == null && successMessage != null) logger.i(successMessage);
+  } catch (_) {
+    progress?.fail();
+    rethrow;
   }
 }
 
@@ -204,7 +107,11 @@ String prompt(String message, {String? skipValue, bool? skip}) {
     logger.i('>>| Skipping with (${skipValue ?? ''})...');
     return skipValue!;
   }
-  return stdin.readLineSync() ?? '';
+  checkCommandCancellation();
+  final answer = stdin.readLineSync();
+  if (answer == null) throw const CommandCancelled();
+  checkCommandCancellation();
+  return answer;
 }
 
 /// Prompts the user for input with a default value and optional validation.
@@ -672,7 +579,7 @@ Future<String> getVersionFromConfig(String clientId) async {
       return '';
     }
 
-    final configJson = await parseConfigFile('config');
+    final configJson = await parseConfigFile(clientId);
     if (configJson['version'] == null) {
       // If version is not found, update the version in config.json
       logger.e('❌ Version not found in config.json.');

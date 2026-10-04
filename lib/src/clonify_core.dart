@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import '../custom_exceptions.dart';
 
 import 'package:clonify/constants.dart';
 import 'package:clonify/messages.dart';
@@ -469,7 +470,7 @@ Future<void> initClonify() async {
     // Step 1: Ensure clonify directory exists
     if (!_ensureClonifyDirectory()) {
       _cleanupCreatedPaths();
-      return;
+      throw CustomException('Could not create the clonify directory.');
     }
 
     final settingsFile = File('./clonify/clonify_settings.yaml');
@@ -493,13 +494,15 @@ Future<void> initClonify() async {
         customFields,
       )) {
         _cleanupCreatedPaths();
-        return;
+        throw CustomException('Could not write clonify/clonify_settings.yaml.');
       }
     } else {
       logger.i(
         'ℹ️ clonify_settings.yaml already exists at ${settingsFile.path}.',
       );
-      validatedClonifySettings(isSilent: false);
+      if (!validatedClonifySettings(isSilent: false)) {
+        throw CustomException('Existing Clonify settings are invalid.');
+      }
     }
 
     // Clear tracking list on successful completion
@@ -722,6 +725,14 @@ ClonifySettings getClonifySettings() {
   }
 
   final content = settingsFile.readAsStringSync();
-  final yaml.YamlMap rawSettings = yaml.loadYaml(content);
+  final Object? rawSettings;
+  try {
+    rawSettings = yaml.loadYaml(content);
+  } on yaml.YamlException {
+    throw CustomException('Invalid YAML in ${settingsFile.path}.');
+  }
+  if (rawSettings is! yaml.YamlMap) {
+    throw CustomException('${settingsFile.path} must contain a YAML map.');
+  }
   return ClonifySettings.fromYaml(rawSettings);
 }

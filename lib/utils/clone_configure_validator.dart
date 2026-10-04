@@ -40,15 +40,23 @@ bool notificationIconIsRequired(Map<String, dynamic> configJson) {
       configJson.containsKey(notificationIconConfigKey);
 }
 
-void assertConfigureReady(String clientId, Map<String, dynamic> configJson) {
-  assertCloneAssetFiles(clientId, configJson);
+void assertConfigureReady(
+  String clientId,
+  Map<String, dynamic> configJson, {
+  Iterable<String> assetFields = requiredCloneAssetFields,
+}) {
+  assertCloneAssetFiles(clientId, configJson, fields: assetFields);
   assertBackgroundGeolocationLicenses(configJson);
   assertNotificationSource(clientId, configJson);
   assertAndroidSigningSource(clientId, configJson);
 }
 
-void assertConfigureFinished(String clientId, Map<String, dynamic> configJson) {
-  assertGeneratedImageFiles(configJson);
+void assertConfigureFinished(
+  String clientId,
+  Map<String, dynamic> configJson, {
+  Iterable<String> assetFields = requiredCloneAssetFields,
+}) {
+  assertGeneratedImageFiles(configJson, fields: assetFields);
   assertGeneratedCloneConfigsFile();
   assertNativeLicensesApplied(configJson);
   assertNotificationOutputs(clientId, configJson);
@@ -57,15 +65,20 @@ void assertConfigureFinished(String clientId, Map<String, dynamic> configJson) {
 
 const requiredCloneAssetFields = ['launcherIcon', 'splashScreen', 'logo'];
 
-void assertCloneAssetFiles(String clientId, Map<String, dynamic> configJson) {
+void assertCloneAssetFiles(
+  String clientId,
+  Map<String, dynamic> configJson, {
+  Iterable<String> fields = requiredCloneAssetFields,
+}) {
   final assetsDir = Directory(p.join('clonify', 'clones', clientId, 'assets'));
+  if (fields.isEmpty && !assetsDir.existsSync()) return;
   if (!assetsDir.existsSync()) {
     throw CustomException(
       'Clone assets directory does not exist: ${assetsDir.path}',
     );
   }
 
-  for (final field in requiredCloneAssetFields) {
+  for (final field in fields) {
     final fileName = trimmedConfigString(configJson[field]);
     if (fileName == null) {
       throw CustomException('Clone config "$field" is not set');
@@ -152,15 +165,19 @@ void assertNotificationSource(
   );
 }
 
-void assertGeneratedImageFiles(Map<String, dynamic> configJson) {
+void assertGeneratedImageFiles(
+  Map<String, dynamic> configJson, {
+  Iterable<String> fields = requiredCloneAssetFields,
+}) {
   final imagesDir = Directory('assets/images');
+  if (fields.isEmpty && !imagesDir.existsSync()) return;
   if (!imagesDir.existsSync()) {
     throw CustomException(
       'Generated images directory does not exist: ${imagesDir.path}',
     );
   }
 
-  for (final field in requiredCloneAssetFields) {
+  for (final field in fields) {
     final fileName = trimmedConfigString(configJson[field]);
     if (fileName == null) {
       throw CustomException('Clone config "$field" is not set');

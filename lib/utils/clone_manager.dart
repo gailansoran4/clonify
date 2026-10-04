@@ -1,6 +1,13 @@
 // Clone Config Section
 import 'dart:convert';
 import 'dart:io';
+import 'configuration_preflight.dart';
+import 'command_process.dart';
+import 'clone_config_generator.dart';
+import 'branding_generator.dart';
+export 'clone_config_generator.dart' show generateCloneConfigFile;
+import 'profile_identity.dart';
+import 'project_lock.dart';
 
 import 'package:chalkdart/chalk.dart';
 import 'package:clonify/constants.dart';
@@ -25,156 +32,6 @@ import 'package:yaml/yaml.dart' as yaml;
 
 // import 'package:clonify/src/package_rename_plus/package_rename_plus.dart'
 //     as package_rename;
-
-/// Generates the `clone_configs.dart` file based on the provided [configModel].
-///
-/// This function creates or updates `lib/generated/clone_configs.dart`,
-/// which contains static constants for various configuration parameters
-/// such as colors, gradients, base URL, client ID, version, primary color,
-/// and custom fields. This file allows Flutter applications to access
-/// clone-specific configurations at compile time.
-///
-/// [configModel] The [CloneConfigModel] containing the configuration data
-///                to be written to the generated file.
-///
-/// Throws a [FileSystemException] if the 'generated' directory cannot be created
-/// or the 'clone_configs.dart' file cannot be written.
-Future<void> generateCloneConfigFile(CloneConfigModel configModel) async {
-  // 1. Check if the 'generated' directory exists
-  final generatedDir = Directory('./lib/generated');
-  if (!generatedDir.existsSync()) {
-    generatedDir.createSync(recursive: true);
-    logger.i('Created "lib/generated" directory.');
-  }
-
-  // 2. Create 'clone_configs.dart' file
-  final file = File('${generatedDir.path}/clone_configs.dart');
-  final sink = file.openWrite();
-
-  final backgroundNotificationColorRaw =
-      (configModel.backgroundNotificationColor?.trim().isNotEmpty ?? false)
-      ? configModel.backgroundNotificationColor!.trim()
-      : configModel.primaryColor;
-  final backgroundNotificationColorLiteral =
-      backgroundNotificationColorRaw == null
-      ? null
-      : notificationColorArgbLiteral(backgroundNotificationColorRaw);
-  final needsDartUiImport =
-      (configModel.colors?.length ?? 0) > 0 ||
-      backgroundNotificationColorLiteral != null;
-
-  // 3. Write 'CloneConfigs' class
-  sink.writeln(
-    '// Auto-generated file. any changes will be overwritten. edit clone config instead.',
-  );
-  if (needsDartUiImport) {
-    sink.writeln("import 'dart:ui';");
-    sink.writeln();
-  }
-  sink.writeln('abstract class CloneConfigs {');
-
-  // 3.1. Write colors
-  for (var i = 0; i < (configModel.colors?.length ?? 0); i++) {
-    final color = configModel.colors![i];
-    sink.writeln('  static const ${color.name} = Color(0xFF${color.color});');
-  }
-
-  sink.writeln('  static const String baseUrl = "${configModel.baseUrl}";');
-  sink.writeln(
-    '  static const String packageName = "${configModel.packageName}";',
-  );
-  sink.writeln('  static const String appName = "${configModel.appName}";');
-  sink.writeln(
-    '  static const String logo = "assets/images/${configModel.logo}";',
-  );
-  sink.writeln(
-    '  static const String launcherIcon = "assets/images/${configModel.launcherIcon}";',
-  );
-  sink.writeln(
-    '  static const String splashScreen = "assets/images/${configModel.splashScreen}";',
-  );
-  sink.writeln(
-    '  static const String firebaseProjectId = "${configModel.firebaseProjectId}";',
-  );
-  if (configModel.shorebirdAppId != null &&
-      configModel.shorebirdAppId!.trim().isNotEmpty) {
-    sink.writeln(
-      '  static const String shorebirdAppId = "${configModel.shorebirdAppId}";',
-    );
-  }
-  sink.writeln('  static const String clientId = "${configModel.clientId}";');
-  sink.writeln('  static const String version = "${configModel.version}";');
-  sink.writeln(
-    '  static const String primaryColor = "${configModel.primaryColor}";',
-  );
-  if (backgroundNotificationColorLiteral != null) {
-    sink.writeln(
-      '  static const Color backgroundNotificationColor = Color($backgroundNotificationColorLiteral);',
-    );
-  }
-  // 3.8 Write Custom Fields (if any exist in clonifySettings)
-  if (clonifySettings.customFields.isNotEmpty) {
-    // Read the config file to get custom field values
-    final configPath = './clonify/clones/${configModel.clientId}/config.json';
-    final configFile = File(configPath);
-    if (configFile.existsSync()) {
-      final configJson =
-          jsonDecode(configFile.readAsStringSync()) as Map<String, dynamic>;
-
-      for (final field in clonifySettings.customFields) {
-        final value = configJson[field.name];
-        if (value != null) {
-          // Generate the constant based on type
-          switch (field.type) {
-            case 'int':
-              sink.writeln('  static const int ${field.name} = $value;');
-              break;
-            case 'double':
-              sink.writeln('  static const double ${field.name} = $value;');
-              break;
-            case 'bool':
-              sink.writeln('  static const bool ${field.name} = $value;');
-              break;
-            case 'string':
-            default:
-              sink.writeln('  static const String ${field.name} = "$value";');
-              break;
-          }
-        }
-      }
-    }
-  }
-
-  // 4. Access the _assetTargetDirectory and for each file in that directory add its path
-  // final assetsDirectory =
-  //     Directory('./clonify/clones/${configModel.clientId}/assets');
-
-  // if (assetsDirectory.existsSync()) {
-  //   final assetFiles = assetsDirectory.listSync();
-  //   for (final asset in assetFiles) {
-  //     if (asset is File) {
-  //       final assetFileName = asset.path.split(Platform.pathSeparator).last;
-  //       // final variableName = path.withoutExtension(assetFileName).replaceAll(
-  //       //     RegExp(r'\W+'), '_'); // Sanitize file names to valid variable names
-  //       final variableName = assetFileName
-  //           .replaceAll(RegExp(r'\W+'), '_')
-  //           .replaceAll(RegExp(r'^\d+'),
-  //               ''); // Sanitize file names to valid variable names
-  //       sink.writeln(
-  //           '  static const String $variableName = "${asset.path}$assetFileName";');
-  //     }
-  //   }
-  // }
-
-  sink.writeln('}');
-
-  // Close the file stream (must await so length check in assertConfigureFinished sees content)
-  await sink.close();
-
-  logger.i(
-    'Generated clone_configs.dart file. You can find it in lib/generated/clone_configs.dart',
-  );
-}
 
 /// Tracks created directories and files for cleanup on cancellation.
 final List<String> _createdClonePaths = [];
@@ -241,7 +98,7 @@ Map<String, String>? _promptCloneBasicInfo() {
 
     final primaryColor = promptUserTUI(
       '🎨 Enter the primary color (hex format: 0xAARRGGBB)',
-      clonifySettings.defaultColor,
+      currentClonifySettings().defaultColor,
       validator: (value) {
         // if (!RegExp(r'^0x[0-9a-fA-F]{8}$').hasMatch(value)) {
         //   errorMessage(
@@ -255,7 +112,7 @@ Map<String, String>? _promptCloneBasicInfo() {
 
     final packageName = promptUserTUI(
       '📦 Enter the package name (e.g., com.example.app)',
-      'com.${clonifySettings.companyName}.${clientId.toLowerCase().replaceAll(' ', '').replaceAll('-', '').replaceAll('_', '')}',
+      'com.${currentClonifySettings().companyName}.${clientId.toLowerCase().replaceAll(' ', '').replaceAll('-', '').replaceAll('_', '')}',
       validator: (value) {
         if (!RegExp(r'^[a-zA-Z]+\.[a-zA-Z]+\.[a-zA-Z]+$').hasMatch(value)) {
           errorMessage('Invalid package name format. Use com.company.app');
@@ -290,7 +147,7 @@ Map<String, String>? _promptCloneBasicInfo() {
     );
 
     String firebaseProjectId = '';
-    if (clonifySettings.firebaseEnabled) {
+    if (currentClonifySettings().firebaseEnabled) {
       firebaseProjectId = promptUserTUI(
         '🔥 Enter the Firebase project ID (e.g., my-project-id)',
         'firebase-$clientId-flutter',
@@ -298,7 +155,7 @@ Map<String, String>? _promptCloneBasicInfo() {
     }
 
     String shorebirdAppId = '';
-    if (clonifySettings.shorebirdEnabled) {
+    if (currentClonifySettings().shorebirdEnabled) {
       shorebirdAppId = promptUserTUI(
         '🐦 Enter the Shorebird app ID (from shorebird.yaml / console)',
         '',
@@ -317,7 +174,7 @@ Map<String, String>? _promptCloneBasicInfo() {
       'shorebirdAppId': shorebirdAppId,
     };
 
-    if (clonifySettings.needsLauncherIcon) {
+    if (currentClonifySettings().needsLauncherIcon) {
       final launcherIcon = promptUserTUI(
         '🎯 Enter the launcher icon filename (e.g., icon.png)',
         '',
@@ -336,7 +193,7 @@ Map<String, String>? _promptCloneBasicInfo() {
       configMap['launcherIcon'] = launcherIcon;
     }
 
-    if (clonifySettings.needsSplashScreen) {
+    if (currentClonifySettings().needsSplashScreen) {
       final splashScreen = promptUserTUI(
         '🎯 Enter the splash screen filename (e.g., splash.png)',
         '',
@@ -360,7 +217,7 @@ Map<String, String>? _promptCloneBasicInfo() {
       configMap['backgroundSplashColor'] = backgroundSplashColor;
     }
 
-    if (clonifySettings.needsLogo) {
+    if (currentClonifySettings().needsLogo) {
       final logo = promptUserTUI(
         '🎯 Enter the logo filename (e.g., logo.png)',
         'logo.png',
@@ -377,9 +234,9 @@ Map<String, String>? _promptCloneBasicInfo() {
       configMap['logo'] = logo;
     }
 
-    if (clonifySettings.customFields.isNotEmpty) {
+    if (currentClonifySettings().customFields.isNotEmpty) {
       infoMessage('\n⚙️  Custom Configuration Fields:');
-      for (final field in clonifySettings.customFields) {
+      for (final field in currentClonifySettings().customFields) {
         final value = promptUserTUI(
           '🔧 Enter value for "${field.name}" (type: ${field.type})',
           '',
@@ -436,8 +293,7 @@ Map<String, String>? _promptCloneBasicInfo() {
 
     return configMap;
   } catch (e) {
-    logger.e('❌ Error during input collection: $e');
-    return null;
+    rethrow;
   }
 }
 
@@ -447,7 +303,14 @@ Map<String, String>? _promptCloneBasicInfo() {
 bool _createCloneStructure(Map<String, String> config) {
   try {
     final clientId = config['clientId']!;
+    assertClientId(clientId);
     final cloneDir = Directory('./clonify/clones/$clientId');
+    assertProjectPath(cloneDir.path);
+    if (cloneDir.existsSync()) {
+      throw CustomException(
+        'Profile "$clientId" already exists. Choose a new client ID.',
+      );
+    }
 
     cloneDir.createSync(recursive: true);
     _createdClonePaths.add(cloneDir.path);
@@ -472,10 +335,20 @@ bool _createCloneStructure(Map<String, String> config) {
     for (final key in config.keys) {
       if (key.startsWith('custom_')) {
         final fieldName = key.substring(7); // Remove 'custom_' prefix
-        configJson[fieldName] = config[key];
+        final field = currentClonifySettings().customFields.firstWhere(
+          (item) => item.name == fieldName,
+        );
+        final value = config[key]!;
+        configJson[fieldName] = switch (field.type) {
+          'int' => int.parse(value),
+          'double' => double.parse(value),
+          'bool' => value.toLowerCase() == 'true',
+          _ => value,
+        };
       }
     }
 
+    validateProfileFields(clientId, configJson);
     final configFile = File('${cloneDir.path}/config.json');
     configFile.writeAsStringSync(
       const JsonEncoder.withIndent('  ').convert(configJson),
@@ -489,8 +362,7 @@ bool _createCloneStructure(Map<String, String> config) {
     );
     return true;
   } catch (e) {
-    logger.e('❌ Failed to create clone structure: $e');
-    return false;
+    rethrow;
   }
 }
 
@@ -512,7 +384,7 @@ Future<bool> _setupCloneServices(Map<String, String> config) async {
       logger.i('🚀 Skipping renaming process...');
     }
 
-    if (clonifySettings.firebaseEnabled) {
+    if (currentClonifySettings().firebaseEnabled) {
       await createFirebaseProject(
         clientId: config['clientId']!,
         packageName: config['packageName']!,
@@ -522,8 +394,7 @@ Future<bool> _setupCloneServices(Map<String, String> config) async {
 
     return true;
   } catch (e) {
-    logger.e('❌ Error during service setup: $e');
-    return false;
+    rethrow;
   }
 }
 
@@ -546,30 +417,32 @@ Future<void> createClone() async {
     final config = _promptCloneBasicInfo();
     if (config == null) {
       logger.w('⚠️ Clone creation cancelled by user');
-      _cleanupCloneCreation();
-      return;
+      throw const CommandCancelled();
     }
 
     // Step 2: Create directory structure and config file
+    assertClientId(config['clientId']!);
+    for (final field in ['launcherIcon', 'splashScreen', 'logo']) {
+      final asset = config[field];
+      if (asset != null && asset.isNotEmpty) {
+        assertProjectPath('assets/images/$asset');
+        assertPngFile('assets/images/$asset', field);
+      }
+    }
     if (!_createCloneStructure(config)) {
-      _cleanupCloneCreation();
-      return;
+      throw CustomException('Could not create profile files.');
     }
 
-    // Step 3: Setup services (rename, Firebase, assets)
-    if (!await _setupCloneServices(config)) {
-      _cleanupCloneCreation();
-      return;
-    }
-
-    // Step 4: Create assets directory
     if (!createCloneAssetsDirectory(config['clientId']!, [
-      config['launcherIcon']!,
-      config['splashScreen']!,
-      config['logo']!,
+      for (final field in ['launcherIcon', 'splashScreen', 'logo'])
+        if (config[field]?.isNotEmpty ?? false) config[field]!,
     ])) {
-      _cleanupCloneCreation();
-      return;
+      throw CustomException('Could not copy profile assets.');
+    }
+
+    // Remote registration is last; a created cloud project cannot be rolled back.
+    if (!await _setupCloneServices(config)) {
+      throw CustomException('Could not configure clone services.');
     }
 
     // Success!
@@ -597,7 +470,9 @@ Future<bool> _performInitialSetup(
   try {
     // Step 1: Copy clone branding assets into the project
     final assetsProgress = progressWithTUI('🎨 Replacing client assets...');
-    replaceAssets(callModel.clientId!);
+    if (Directory('clonify/clones/${callModel.clientId}/assets').existsSync()) {
+      replaceAssets(callModel.clientId!);
+    }
     assetsProgress?.complete('Assets replaced successfully');
 
     // Step 2: Rename app name and package
@@ -610,57 +485,62 @@ Future<bool> _performInitialSetup(
     );
     renameProgress?.complete('Package renamed successfully');
 
-    if (callModel.isDebug) {
-      return true; // Early return for debug mode
-    }
-
-    // Step 3: Create Firebase project and enable FCM
-    if (clonifySettings.firebaseEnabled) {
-      final firebaseProjectId =
-          (configJson['firebaseProjectId'] as String?) ?? '';
-      if (firebaseProjectId.isEmpty) {
-        logger.i(
-          '>>| Skipping Firebase configuration (no firebaseProjectId in clone config).',
-        );
-      } else {
-        final firebaseProgress = progressWithTUI(
-          '🔥 Configuring Firebase for $firebaseProjectId...',
-        );
-        await addFirebaseToApp(
-          clientId: callModel.clientId!,
-          packageName: configJson['packageName'],
-          firebaseProjectId: firebaseProjectId,
-          firebaseServiceAccount:
-              configJson['firebaseServiceAccount'] as String?,
-          skip: callModel.skipFirebaseConfigure,
-          refresh: callModel.refreshFirebase,
-        );
-        firebaseProgress?.complete('Firebase configured successfully');
-      }
-    }
-
-    // Step 4: Sync Shorebird app_id (runs even with --skipAll unless explicitly skipped)
-    if (clonifySettings.shorebirdEnabled) {
-      final shorebirdAppId = resolveShorebirdAppId(configJson);
-      if (shorebirdAppId.isEmpty) {
-        logger.i(
-          '>>| Skipping Shorebird configuration (no shorebirdAppId in clone config).',
-        );
-      } else {
-        final shorebirdProgress = progressWithTUI(
-          '🐦 Syncing Shorebird app_id to $shorebirdAppId...',
-        );
-        await configureShorebirdAppId(
-          shorebirdAppId: shorebirdAppId,
-          skip: callModel.skipShorebirdConfigure,
-        );
-        shorebirdProgress?.complete('Shorebird app_id synced successfully');
-      }
-    }
-
     return true;
   } catch (e) {
+    if (e is CommandCancelled) rethrow;
     throw CustomException('Initial setup failed: $e');
+  }
+}
+
+Future<void> configureProfileServices(
+  ConfigureCommandModel callModel,
+  Map<String, dynamic> configJson,
+) async {
+  if (callModel.isDebug) {
+    return;
+  }
+
+  // Step 4: Sync Shorebird app_id (runs even with --skipAll unless explicitly skipped)
+  if (currentClonifySettings().shorebirdEnabled) {
+    final shorebirdAppId = resolveShorebirdAppId(configJson);
+    if (shorebirdAppId.isEmpty) {
+      logger.i(
+        '>>| Skipping Shorebird configuration (no shorebirdAppId in clone config).',
+      );
+    } else {
+      final shorebirdProgress = progressWithTUI(
+        '🐦 Syncing Shorebird app_id to $shorebirdAppId...',
+      );
+      await configureShorebirdAppId(
+        shorebirdAppId: shorebirdAppId,
+        skip: callModel.skipShorebirdConfigure,
+      );
+      shorebirdProgress?.complete('Shorebird app_id synced successfully');
+    }
+  }
+
+  // Step 3: Create Firebase project and enable FCM
+  if (currentClonifySettings().firebaseEnabled) {
+    final firebaseProjectId =
+        (configJson['firebaseProjectId'] as String?) ?? '';
+    if (firebaseProjectId.isEmpty) {
+      logger.i(
+        '>>| Skipping Firebase configuration (no firebaseProjectId in clone config).',
+      );
+    } else {
+      final firebaseProgress = progressWithTUI(
+        '🔥 Configuring Firebase for $firebaseProjectId...',
+      );
+      await addFirebaseToApp(
+        clientId: callModel.clientId!,
+        packageName: configJson['packageName'],
+        firebaseProjectId: firebaseProjectId,
+        firebaseServiceAccount: configJson['firebaseServiceAccount'] as String?,
+        skip: callModel.skipFirebaseConfigure,
+        refresh: callModel.refreshFirebase,
+      );
+      firebaseProgress?.complete('Firebase configured successfully');
+    }
   }
 }
 
@@ -707,10 +587,10 @@ Future<String?> _handleVersionManagement(
   }
 
   // Sync pubspec version with config
-  if (yamlVersion != configVersion) {
+  if (yamlVersion != configVersion && !callModel.skipPubUpdate) {
     final updateYamlVersionAnswer = prompt(
       'Version in pubspec.yaml ($yamlVersion) is different from config file ($configVersion). Do you want to update pubspec.yaml with the config version? (y/n):',
-      skip: callModel.skipAll || callModel.skipPubUpdate,
+      skip: callModel.skipAll,
       skipValue: 'y',
     );
 
@@ -722,7 +602,10 @@ Future<String?> _handleVersionManagement(
   // Handle version updates
   final changeVersionAnswer = prompt(
     'Do you want to update the version number ($configVersion)? (y/n):',
-    skip: callModel.skipVersionUpdate,
+    skip:
+        callModel.skipAll ||
+        callModel.skipVersionUpdate ||
+        callModel.autoUpdate,
     skipValue: callModel.autoUpdate ? 'y' : 'No',
   );
 
@@ -734,7 +617,7 @@ Future<String?> _handleVersionManagement(
       skipValue: versionNumberIncrementor(configVersion),
       skip: callModel.autoUpdate,
     );
-    await updateYamlVersionInPubspec(newVersion);
+    if (!callModel.skipPubUpdate) await updateYamlVersionInPubspec(newVersion);
     configJson['version'] = newVersion;
     await File(
       './clonify/clones/${callModel.clientId}/config.json',
@@ -743,216 +626,6 @@ Future<String?> _handleVersionManagement(
   }
 
   return configVersion;
-}
-
-/// Runs Flutter build commands and generates configuration.
-///
-/// Returns true if successful, false otherwise.
-Future<bool> _configureLauncherIconsAndSplashScreen(
-  Map<String, dynamic> configJson,
-) async {
-  try {
-    // Step 1: Load and parse the YAML files
-    final launcherIconsConfigFile = File(Constants.flutterLauncherIconsPath);
-    final nativeSplashConfigFile = File(Constants.flutterNativeSplashPath);
-
-    // Create the config files if it does not exist
-    if (!launcherIconsConfigFile.existsSync()) {
-      launcherIconsConfigFile.createSync(recursive: true);
-      launcherIconsConfigFile.writeAsStringSync(
-        Constants.flutterLauncherIconsYaml,
-      );
-      logger.i(
-        '✅ Created ${Constants.flutterLauncherIconsPath}. you can modify it for customization.',
-      );
-    }
-    if (!nativeSplashConfigFile.existsSync()) {
-      nativeSplashConfigFile.createSync(recursive: true);
-      nativeSplashConfigFile.writeAsStringSync(
-        Constants.flutterNativeSplashYaml,
-      );
-      logger.i(
-        '✅ Created ${Constants.flutterNativeSplashPath}. you can modify it for customization.',
-      );
-    }
-    final launcherIconsYamlContent = launcherIconsConfigFile.readAsStringSync();
-    final launcherIconsYamlEditor = YamlEditor(launcherIconsYamlContent);
-    final nativeSplashYamlContent = nativeSplashConfigFile.readAsStringSync();
-    final nativeSplashYamlEditor = YamlEditor(nativeSplashYamlContent);
-
-    // Step 2: Update YAML files with new app name and package name
-    final clonifySettings = getClonifySettings();
-    try {
-      final updateAndroidLauncherIcon = clonifySettings.updateAndroidInfo;
-      final updateIOSLauncherIcon = clonifySettings.updateIOSInfo;
-
-      final launcherIconPath = "assets/images/${configJson['launcherIcon']}";
-
-      launcherIconsYamlEditor.update([
-        'flutter_launcher_icons',
-        'image_path',
-      ], launcherIconPath);
-      launcherIconsYamlEditor.update([
-        'flutter_launcher_icons',
-        'adaptive_icon_foreground',
-      ], launcherIconPath);
-
-      launcherIconsYamlEditor.update([
-        'flutter_launcher_icons',
-        'android',
-      ], updateAndroidLauncherIcon);
-
-      launcherIconsYamlEditor.update([
-        'flutter_launcher_icons',
-        'ios',
-      ], updateIOSLauncherIcon);
-
-      launcherIconsYamlEditor.update(
-        ['flutter_launcher_icons', 'web'],
-        {
-          'generate': true,
-          'image_path': launcherIconPath,
-          'background_color': clonifySettings.defaultColor,
-          'theme_color': clonifySettings.defaultColor,
-        },
-      );
-
-      launcherIconsConfigFile.writeAsStringSync(
-        launcherIconsYamlEditor.toString(),
-      );
-      logger.i(
-        '✅ Updated ${Constants.flutterLauncherIconsPath} with launcher icon asset',
-      );
-    } catch (e) {
-      logger.e('❌ Error updating ${Constants.flutterLauncherIconsPath}: $e');
-    }
-    if (configJson['splashScreen'] != null) {
-      try {
-        final splashImagePath = "assets/images/${configJson['splashScreen']}";
-        final splashColor =
-            notificationColorHexFromPrimary(
-              ((configJson['backgroundSplashColor'] as String?)
-                          ?.trim()
-                          .isNotEmpty ??
-                      false)
-                  ? (configJson['backgroundSplashColor'] as String).trim()
-                  : '#FFFFFF',
-            ) ??
-            '#FFFFFF';
-
-        nativeSplashYamlEditor.update([
-          'flutter_native_splash',
-          'color',
-        ], splashColor);
-        nativeSplashYamlEditor.update([
-          'flutter_native_splash',
-          'image',
-        ], splashImagePath);
-        nativeSplashYamlEditor.update([
-          'flutter_native_splash',
-          'android_12',
-          'image',
-        ], splashImagePath);
-        nativeSplashYamlEditor.update([
-          'flutter_native_splash',
-          'android_12',
-          'color',
-        ], splashColor);
-        nativeSplashYamlEditor.update(['flutter_native_splash', 'web'], true);
-        nativeSplashConfigFile.writeAsStringSync(
-          nativeSplashYamlEditor.toString(),
-        );
-        logger.i(
-          '✅ Updated ${Constants.flutterNativeSplashPath} with splash screen asset',
-        );
-      } catch (e) {
-        logger.e('❌ Error updating ${Constants.flutterNativeSplashPath}: $e');
-      }
-    } else {
-      logger.i(
-        'No splash screen asset provided. Skipping update of ${Constants.flutterNativeSplashPath}',
-      );
-    }
-
-    // Step 3: Check for dependencies and run build commands
-    final pubspecFile = File(Constants.pubspecFilePath);
-    if (!pubspecFile.existsSync()) {
-      logger.w(
-        '⚠️ ${Constants.pubspecFilePath} not found, skipping package commands.',
-      );
-      return true;
-    }
-
-    final pubspecContent = pubspecFile.readAsStringSync();
-    final pubspecYaml = yaml.loadYaml(pubspecContent);
-    final dependencies = pubspecYaml['dependencies'] as yaml.YamlMap?;
-    final devDependencies = pubspecYaml['dev_dependencies'] as yaml.YamlMap?;
-
-    // Helper function to check if a package exists in dependencies
-    bool hasPackage(String packageName) {
-      return (dependencies != null && dependencies.containsKey(packageName)) ||
-          (devDependencies != null && devDependencies.containsKey(packageName));
-    }
-
-    // Run flutter_launcher_icons if available
-    if (hasPackage('flutter_launcher_icons')) {
-      final iconProgress = progressWithTUI('🚀 Generating launcher icons...');
-      await runCommand('dart', [
-        'run',
-        'flutter_launcher_icons',
-      ], successMessage: '✅ Flutter launcher icons generated successfully!');
-      iconProgress?.complete('Launcher icons generated');
-    } else {
-      logger.w(
-        '⚠️ `flutter_launcher_icons` not found in your pubspec.yaml.\n'
-        '   Add it to dev_dependencies to generate launcher icons:\n'
-        '   dev_dependencies:\n'
-        '     flutter_launcher_icons: ^0.13.1',
-      );
-    }
-
-    // Run flutter_native_splash if splash screen is configured and package is available
-    if (configJson['splashScreen'] != null) {
-      if (hasPackage('flutter_native_splash')) {
-        final splashProgress = progressWithTUI('💦 Creating splash screen...');
-        await runCommand(
-          'dart',
-          ['run', 'flutter_native_splash:create'],
-          successMessage:
-              '✅ Flutter native splash screen created successfully!',
-        );
-        splashProgress?.complete('Splash screen created');
-      } else {
-        logger.w(
-          '⚠️ `flutter_native_splash` not found in your pubspec.yaml.\n'
-          '   Add it to dev_dependencies to generate splash screens:\n'
-          '   dev_dependencies:\n'
-          '     flutter_native_splash: ^2.3.1',
-        );
-      }
-    }
-
-    // Run intl_utils if available
-    if (hasPackage('intl_utils')) {
-      final intlProgress = progressWithTUI(
-        '🌍 Generating internationalization files...',
-      );
-      await runCommand('dart', [
-        'run',
-        'intl_utils:generate',
-      ], successMessage: '✅ Intl utils generated successfully!');
-      intlProgress?.complete('Internationalization files generated');
-    } else {
-      logger.w(
-        '⚠️ `intl_utils` not found in your pubspec.yaml, skipping `intl_utils:generate` command.',
-      );
-    }
-
-    return true;
-  } catch (e) {
-    logger.e('❌ Error during build commands: $e');
-    return false;
-  }
 }
 
 Future<void> applyCloneNativeConfig(
@@ -971,51 +644,75 @@ Future<void> applyCloneNativeConfig(
 /// iOS/Android/project files are restored and a single error is reported.
 Future<Map<String, dynamic>?> configureApp(
   ConfigureCommandModel callModel,
-) async {
+) => withProjectLock(() async {
   logger.i('🚀 Configuring ${callModel.clientId}…');
+  String? onlineProject;
 
   try {
-    final configJson = await parseConfigFile(callModel.clientId!);
-    assertConfigureReady(callModel.clientId!, configJson);
+    final plan = inspectConfigure(callModel);
+    final configJson = plan.config;
+    for (final warning in plan.warnings) {
+      logger.w(warning);
+    }
 
-    return await runConfigureTransaction(
-      () async {
-        await _performInitialSetup(callModel, configJson);
+    return await runConfigureTransaction(() async {
+      await _performInitialSetup(callModel, configJson);
 
-        final finalVersion = await _handleVersionManagement(
-          callModel,
-          configJson,
-        );
-        if (finalVersion == null) {
-          throw CustomException('Version update failed');
-        }
+      final finalVersion = await _handleVersionManagement(
+        callModel,
+        configJson,
+      );
+      if (finalVersion == null) {
+        throw CustomException('Version update failed');
+      }
 
-        if (!await _configureLauncherIconsAndSplashScreen(configJson)) {
-          throw CustomException('Launcher icon or splash screen update failed');
-        }
+      if (!await configureLauncherIconsAndSplashScreen(configJson)) {
+        throw CustomException('Launcher icon or splash screen update failed');
+      }
 
-        await generateCloneConfigFile(CloneConfigModel.fromJson(configJson));
-        await applyCloneNativeConfig(callModel.clientId!, configJson);
-        assertConfigureFinished(callModel.clientId!, configJson);
-        saveLastClientId(callModel.clientId!);
-        logger.i('✅ Configure finished for ${callModel.clientId}');
-        return configJson;
-      },
-      roots: {
-        ...configureMutableRoots,
-        if (clonifySettings.firebaseEnabled)
-          clonifySettings.firebaseSettingsFilePath,
-      },
-    );
+      await generateCloneConfigFile(CloneConfigModel.fromJson(configJson));
+      await applyCloneNativeConfig(callModel.clientId!, configJson);
+      assertConfigureFinished(
+        callModel.clientId!,
+        configJson,
+        assetFields: plan.assetFields,
+      );
+      if (plan.firebaseMode == FirebaseSetupMode.online) {
+        onlineProject = configJson['firebaseProjectId'] as String;
+      }
+      await configureProfileServices(callModel, configJson);
+      assertProfileIdentity(
+        callModel.clientId!,
+        configJson,
+        android: plan.settings.updateAndroidInfo,
+        ios: plan.settings.updateIOSInfo,
+        requireSelected: false,
+        checkFirebase: !callModel.isDebug,
+        checkShorebird: !callModel.isDebug && !callModel.skipShorebirdConfigure,
+        checkVersion: !callModel.skipPubUpdate,
+      );
+      checkCommandCancellation();
+      recordConfiguredProfile(callModel.clientId!, configJson);
+      await saveLastClientId(callModel.clientId!);
+      logger.i('✅ Configure finished for ${callModel.clientId}');
+      return configJson;
+    }, roots: plan.roots);
   } on ConfigureRolledBackException catch (error) {
     logger.e('❌ ${error.message}');
-    logger.i('↩️  Restored previous iOS, Android, and project files.');
+    if (onlineProject != null) {
+      logger.w(
+        'FlutterFire may have registered apps in $onlineProject. Local recovery does not remove cloud apps.',
+      );
+    }
+    if (error.restoreError == null) {
+      logger.i('↩️  Restored previous iOS, Android, and project files.');
+    }
     rethrow;
   } catch (e) {
     logger.e('❌ Configure failed: $e');
     rethrow;
   }
-}
+});
 
 /// Updates the 'version' field in the `pubspec.yaml` file.
 ///
@@ -1046,7 +743,9 @@ Future<void> updateYamlVersionInPubspec(String newVersion) async {
 ///
 /// Throws a [FileSystemException] if the directory exists but cannot be deleted.
 Future<void> cleanupPartialClone(String clientId) async {
+  assertClientId(clientId);
   final cloneDir = Directory('./clonify/clones/$clientId');
+  assertProjectPath(cloneDir.path);
   if (cloneDir.existsSync()) {
     cloneDir.deleteSync(recursive: true);
     logger.i('🧹 Partial clone cleaned up for $clientId.');
@@ -1093,26 +792,8 @@ Future<void> getCurrentCloneConfig() async {
   }
 }
 
-Future<Map<String, dynamic>> parseConfigFile(String clientId) async {
-  final configFile = File('./clonify/clones/$clientId/config.json');
-
-  if (!configFile.existsSync()) {
-    throw FileSystemException(
-      'Config file not found for $clientId',
-      configFile.path,
-    );
-  }
-
-  final content = await configFile.readAsString();
-  final config = jsonDecode(content) as Map<String, dynamic>;
-
-  logger.i('📄 Loaded configuration:');
-  logger.i('App Name: ${config['appName']}');
-  logger.i('Primary Color: ${config['primaryColor']}');
-  // logger.i('Base URL: ${config['baseUrl']}');
-
-  return config;
-}
+Future<Map<String, dynamic>> parseConfigFile(String clientId) async =>
+    readCloneProfile(clientId);
 
 /// Lists all currently available Clonify project clones.
 ///
@@ -1122,7 +803,7 @@ Future<Map<String, dynamic>> parseConfigFile(String clientId) async {
 ///
 /// If no clones are found or if there are errors parsing configuration files,
 /// appropriate messages are logged.
-void listClients() async {
+Future<void> listClients() async {
   infoMessage('\n📋 Available Clones');
 
   final dir = Directory('./clonify/clones');
