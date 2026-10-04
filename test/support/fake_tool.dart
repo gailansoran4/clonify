@@ -66,7 +66,7 @@ Future<void> main(List<String> arguments) async {
   } else if (arguments.first == 'fastlane') {
     final contents = File('fastlane/Fastfile').readAsStringSync();
     if (!contents.contains('com.example.alpha') ||
-        !contents.contains('build/')) {
+        !contents.replaceAll(r'\', '/').contains('build/')) {
       stderr.writeln('Fastfile must be updated before upload');
       exitCode = 8;
       return;

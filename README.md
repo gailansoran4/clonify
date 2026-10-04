@@ -254,6 +254,8 @@ files, profile configuration, versions, and Firebase metadata. Regenerable build
 and tool caches are excluded. External tool caches outside the project, cloud
 Firebase app registrations, and store uploads cannot be rolled back. An upload
 failure reports completed uploads and warns when remote completion is uncertain.
+Shorebird release/patch failures restore the preceding local configure too;
+published remote releases or patches must be checked separately before retrying.
 
 ### Upgrade workflow
 

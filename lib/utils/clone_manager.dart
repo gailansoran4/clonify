@@ -642,9 +642,11 @@ Future<void> applyCloneNativeConfig(
 /// Validates first, then applies every mutation inside an all-or-nothing
 /// checkpoint. If Android fails after iOS (or any later step fails), previous
 /// iOS/Android/project files are restored and a single error is reported.
+/// [afterConfigure] runs within the same checkpoint for compound commands.
 Future<Map<String, dynamic>?> configureApp(
-  ConfigureCommandModel callModel,
-) => withProjectLock(() async {
+  ConfigureCommandModel callModel, {
+  Future<void> Function()? afterConfigure,
+}) => withProjectLock(() async {
   logger.i('🚀 Configuring ${callModel.clientId}…');
   String? onlineProject;
 
@@ -694,6 +696,7 @@ Future<Map<String, dynamic>?> configureApp(
       checkCommandCancellation();
       recordConfiguredProfile(callModel.clientId!, configJson);
       await saveLastClientId(callModel.clientId!);
+      if (afterConfigure != null) await afterConfigure();
       logger.i('✅ Configure finished for ${callModel.clientId}');
       return configJson;
     }, roots: plan.roots);

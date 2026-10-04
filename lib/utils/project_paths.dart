@@ -2,10 +2,26 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../custom_exceptions.dart';
 
+/// Expresses paths relative to the resolved project root without following
+/// links inside the project. Windows temporary directories can use 8.3 aliases.
+String projectAbsolutePath(String path) {
+  final lexicalRoot = p.normalize(Directory.current.absolute.path);
+  final absolute = p.normalize(p.absolute(path));
+  if (p.equals(lexicalRoot, absolute) || p.isWithin(lexicalRoot, absolute)) {
+    return p.normalize(
+      p.join(
+        Directory.current.resolveSymbolicLinksSync(),
+        p.relative(absolute, from: lexicalRoot),
+      ),
+    );
+  }
+  return absolute;
+}
+
 /// Keeps managed paths in this project and rejects symlink escapes before writes.
 void assertProjectPath(String path, {bool allowSymlinks = true}) {
   final root = Directory.current.resolveSymbolicLinksSync();
-  final absolute = p.normalize(p.absolute(path));
+  final absolute = projectAbsolutePath(path);
   if (!p.isWithin(root, absolute)) {
     throw CustomException('Path must be inside this project: $path');
   }
@@ -37,7 +53,7 @@ void assertProjectPath(String path, {bool allowSymlinks = true}) {
 
 bool isProtectedProjectPath(String path) {
   final root = Directory.current.resolveSymbolicLinksSync();
-  final relative = p.relative(p.normalize(p.absolute(path)), from: root);
+  final relative = p.relative(projectAbsolutePath(path), from: root);
   final segments = p.split(relative);
   return segments.isEmpty || ['.git', '.dart_tool'].contains(segments.first);
 }

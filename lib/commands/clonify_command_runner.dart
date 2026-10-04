@@ -10,7 +10,6 @@ import 'diagnostic_commands.dart';
 import '../utils/configuration_preflight.dart';
 import '../utils/project_lock.dart';
 import '../utils/file_tree_checkpoint.dart';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -190,7 +189,7 @@ Future<String> resolveClientIdOrThrow({
     throw CustomException(missingMessage ?? Messages.clientIdRequired);
   }
 
-  if (preferLastWithoutPrompt) return lastClientId;
+  if (preferLastWithoutPrompt || skipAll) return lastClientId;
 
   if (!skipAll) {
     final answer = prompt(Messages.useLastClientIdMessage(lastClientId));
@@ -312,12 +311,7 @@ class ShorebirdCommand extends ClientIdCommand {
 
     assertToolAvailable('shorebird');
     final configFile = File(Constants.configFilePath(clientId));
-    if (!configFile.existsSync()) {
-      throw CustomException('Clone config not found: ${configFile.path}');
-    }
-
-    final configJson =
-        jsonDecode(configFile.readAsStringSync()) as Map<String, dynamic>;
+    final configJson = readCloneProfile(clientId);
     final packageName = (configJson['packageName'] as String?)?.trim() ?? '';
     final shorebirdAppId = resolveShorebirdAppId(configJson);
 
@@ -339,19 +333,25 @@ class ShorebirdCommand extends ClientIdCommand {
         ..skipAll = true
         ..skipFirebaseConfigure = skipFirebase
         ..skipShorebirdConfigure = false,
+      afterConfigure: () async {
+        assertBundleIdMatches(
+          shorebirdArgs: shorebirdArgs,
+          expectedPackageName: packageName,
+        );
+        assertShorebirdAppIdMatches(shorebirdAppId);
+        logger.i(
+          'Running Shorebird (app_id=$shorebirdAppId, package=$packageName, clientId=$clientId)',
+        );
+        try {
+          await execShorebird(shorebirdArgs);
+        } catch (_) {
+          logger.w(
+            'Shorebird may have published remotely. Check its release status before retrying; local recovery cannot undo a published release or patch.',
+          );
+          rethrow;
+        }
+      },
     );
-
-    assertBundleIdMatches(
-      shorebirdArgs: shorebirdArgs,
-      expectedPackageName: packageName,
-    );
-    assertShorebirdAppIdMatches(shorebirdAppId);
-
-    logger.i(
-      '🐦 Running shorebird ${shorebirdArgs.join(' ')} '
-      '(app_id=$shorebirdAppId, package=$packageName, clientId=$clientId)',
-    );
-    await execShorebird(shorebirdArgs);
   }
 }
 
@@ -436,22 +436,18 @@ class UploadCommand extends ClientIdCommand {
       provided: results.clientId,
       skipAll: results.clonifyFlag(ClonifyCommandFlags.skipAll),
     );
-    try {
-      await uploadApps(
-        clientId,
-        uploadAndroid: results['uploadAndroid'] as bool,
-        uploadIOS: results['uploadIOS'] as bool,
-        skipAll: results.clonifyFlag(ClonifyCommandFlags.skipAll),
-        skipAndroidUploadCheck: results.clonifyFlag(
-          ClonifyCommandFlags.skipAndroidUploadCheck,
-        ),
-        skipIOSUploadCheck: results.clonifyFlag(
-          ClonifyCommandFlags.skipIOSUploadCheck,
-        ),
-      );
-    } catch (error) {
-      throw CustomException(Messages.failedToUploadClone(clientId, error));
-    }
+    await uploadApps(
+      clientId,
+      uploadAndroid: results['uploadAndroid'] as bool,
+      uploadIOS: results['uploadIOS'] as bool,
+      skipAll: results.clonifyFlag(ClonifyCommandFlags.skipAll),
+      skipAndroidUploadCheck: results.clonifyFlag(
+        ClonifyCommandFlags.skipAndroidUploadCheck,
+      ),
+      skipIOSUploadCheck: results.clonifyFlag(
+        ClonifyCommandFlags.skipIOSUploadCheck,
+      ),
+    );
   }
 }
 

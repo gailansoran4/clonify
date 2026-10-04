@@ -95,10 +95,7 @@ class FileTreeCheckpoint {
           );
         }
       }
-      final paths = roots
-          .map((root) => p.normalize(p.absolute(root)))
-          .toSet()
-          .toList();
+      final paths = roots.map(projectAbsolutePath).toSet().toList();
       paths.removeWhere(
         (root) =>
             paths.any((other) => other != root && p.isWithin(other, root)),
@@ -222,7 +219,7 @@ void writeRecoveryJournal(FileTreeCheckpoint checkpoint, String state) {
     'schema': 1,
     'project': Directory.current.resolveSymbolicLinksSync(),
     'state': state,
-    'backup': checkpoint.backupDir.absolute.path,
+    'backup': projectAbsolutePath(checkpoint.backupDir.path),
     'entries': [
       for (final entry in checkpoint.entries)
         {
@@ -314,7 +311,7 @@ Future<T> runConfigureTransaction<T>(
   final paths = roots.where((root) => root.trim().isNotEmpty).toSet();
   for (final root in paths) {
     assertProjectPath(root, allowSymlinks: false);
-    final absolute = p.normalize(p.absolute(root));
+    final absolute = projectAbsolutePath(root);
     if (!p.isWithin(project, absolute) || isProtectedProjectPath(absolute)) {
       throw CustomException(
         'Cannot snapshot path outside project files: $root',
@@ -464,7 +461,10 @@ void _unparkSkippedDirectories(
 }
 
 bool _skipCheckpointDirectory(String path) {
-  final relative = p.relative(p.absolute(path), from: Directory.current.path);
+  final relative = p.relative(
+    projectAbsolutePath(path),
+    from: Directory.current.resolveSymbolicLinksSync(),
+  );
   final segments = p.split(relative);
   return segments.isNotEmpty &&
       [

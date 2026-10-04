@@ -47,6 +47,65 @@ void main() {
       .toList();
 
   test(
+    'skipAll reuses the selected profile for configure, build and upload',
+    () async {
+      success(await fixture.run(configure));
+      success(await fixture.run(['configure', '--skipAll']));
+      success(await fixture.run(['build', '--skipAll', '--no-buildIpa']));
+      success(await fixture.run(['upload', '--skipAll', '--no-uploadIOS']));
+      expect(fixture.file('tool-upload-android').existsSync(), isTrue);
+    },
+  );
+
+  test(
+    'failed Shorebird operation restores the entire preceding configure',
+    () async {
+      fixture.write(
+        'clonify/clonify_settings.yaml',
+        fixture
+            .file('clonify/clonify_settings.yaml')
+            .readAsStringSync()
+            .replaceFirst(
+              'shorebird:\n  enabled: false',
+              'shorebird:\n  enabled: true',
+            ),
+      );
+      fixture.profile(
+        'alpha',
+        changes: {'shorebirdAppId': '0448f2f7-a408-4362-a6e7-257fe3079fb8'},
+      );
+      fixture.write('shorebird.yaml', 'app_id: previous\n');
+      final before = fixture.snapshot();
+      final result = await fixture.run(
+        ['shorebird', '--clientId', 'alpha', '--', 'release', 'android'],
+        env: {'CLONIFY_TEST_FAIL': 'shorebird'},
+      );
+      expect(result.exitCode, 1);
+      expect(
+        '${result.stdout}${result.stderr}',
+        contains('may have published remotely'),
+      );
+      expect(fixture.snapshot(), before);
+    },
+  );
+
+  test(
+    'end of input at upload confirmation retains cancellation exit code',
+    () async {
+      success(await fixture.run(configure));
+      final before = fixture.snapshot();
+      final process = await fixture.start(['upload', '--clientId', 'alpha']);
+      final stdout = process.stdout.drain<void>();
+      final stderr = process.stderr.drain<void>();
+      await process.stdin.close();
+      expect(await process.exitCode.timeout(const Duration(seconds: 10)), 130);
+      await stdout;
+      await stderr;
+      expect(fixture.snapshot(), before);
+    },
+  );
+
+  test(
     'doctor and dry-run validate without project mutations or subprocesses',
     () async {
       final before = fixture.snapshot();

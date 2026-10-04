@@ -18,6 +18,8 @@
 - Preserve custom MainActivity code on repeated switches, safely escape generated
   Dart/YAML/XML strings, validate custom fields, and await active-profile writes.
 - Make `--skipPubUpdate` honor its name and make `--skipAll` skip version prompts.
+- Reuse the selected profile with `--skipAll`, preserve upload cancellation exit
+  codes, and include the Shorebird release/patch step in local configure recovery.
 - Split branding and clone-code generation into focused modules. Make parsed
   clone fields immutable, remove unused process/mock/codegen dependencies, and
   update compatible packages while retaining Dart 3.8.1 support.

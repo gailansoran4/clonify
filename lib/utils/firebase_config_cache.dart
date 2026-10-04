@@ -214,7 +214,10 @@ void assertFirebaseCacheFiles(Directory cache) {
       FileSystemEntityType.directory) {
     throw CustomException('Firebase cache must be a regular directory.');
   }
-  final allowedFiles = {'firebase.json', ...firebaseApplicationConfigPaths};
+  final allowedFiles = {
+    'firebase.json',
+    ...firebaseApplicationConfigPaths.map(p.normalize),
+  };
   final allowedDirectories = {
     for (final file in firebaseApplicationConfigPaths)
       ...p

@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import '../test_utils.dart';
 
@@ -377,7 +378,7 @@ abstract class CloneConfigs {
       final clones = clonesDir
           .listSync()
           .whereType<Directory>()
-          .map((d) => d.path.split('/').last)
+          .map((d) => p.basename(d.path))
           .toList();
 
       expect(clones, hasLength(3));
@@ -395,7 +396,7 @@ abstract class CloneConfigs {
       final clones = clonesDir
           .listSync()
           .whereType<Directory>()
-          .map((d) => d.path.split('/').last)
+          .map((d) => p.basename(d.path))
           .toList();
 
       expect(clones, isEmpty);
