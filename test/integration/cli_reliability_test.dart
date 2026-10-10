@@ -133,16 +133,30 @@ PRODUCT_BUNDLE_IDENTIFIER = com.old.ios.NotificationExtension;
       expect(ios, contains('com.example.alpha.ios;'));
       expect(ios, contains('com.example.alpha.ios.RunnerTests'));
       expect(ios, contains('com.example.alpha.ios.NotificationExtension'));
-      success(await fixture.run(['build', '--skipAll']));
-      success(await fixture.run(['upload', '--skipAll']));
+      success(
+        await fixture.run([
+          'build',
+          '--skipAll',
+          if (!Platform.isMacOS) '--no-buildIpa',
+        ]),
+      );
+      success(
+        await fixture.run([
+          'upload',
+          '--skipAll',
+          if (!Platform.isMacOS) '--no-uploadIOS',
+        ]),
+      );
       expect(
         fixture.file('tool-upload-android').readAsStringSync(),
         contains('com.example.alpha.android'),
       );
-      expect(
-        fixture.file('tool-upload-ios').readAsStringSync(),
-        contains('com.example.alpha.ios'),
-      );
+      if (Platform.isMacOS) {
+        expect(
+          fixture.file('tool-upload-ios').readAsStringSync(),
+          contains('com.example.alpha.ios'),
+        );
+      }
       final output = await fixture.run(['which']);
       success(output);
       expect(

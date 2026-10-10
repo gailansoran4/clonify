@@ -203,9 +203,13 @@ void main() {
           'void main() { print(jsonEncode([CloneConfigs.clientId, ${values.map(dartString).join(',')} ])); }',
     );
     // Execute the generated source with the real SDK, not fixture tool stubs.
-    final result = await Process.run(Platform.resolvedExecutable, [
-      'verify.dart',
-    ], workingDirectory: fixture.project.path);
+    final result = await Process.run(
+      Platform.resolvedExecutable,
+      ['verify.dart'],
+      workingDirectory: fixture.project.path,
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
     expect(result.exitCode, 0, reason: '${result.stderr}');
     expect(jsonDecode(result.stdout as String), ['alpha', ...values]);
   });
