@@ -143,9 +143,9 @@ void main() {
       sourceMetadata['firestore'] = {'rules': 'firestore.rules'};
       writeFirebaseFixtureJson(project.path, 'firebase.json', sourceMetadata);
       save('customer', 'project-a', 'com.customer.a');
-      final cached =
-          jsonDecode(File(cachePath('firebase.json')).readAsStringSync())
-              as Map;
+      final cached = jsonDecode(
+        File(cachePath('firebase.json')).readAsStringSync(),
+      ) as Map;
       expect(cached.keys, ['flutter']);
 
       final targetMetadata = {
@@ -187,9 +187,8 @@ void main() {
     () {
       writeFirebaseFixture(project.path, 'project-a', 'com.customer.a');
       save('customer', 'project-a', 'com.customer.a');
-      final cachedOptions = File(
-        cachePath('lib/firebase_options.dart'),
-      ).readAsStringSync();
+      final cachedOptions = File(cachePath('lib/firebase_options.dart'))
+          .readAsStringSync();
       writeFirebaseFixture(project.path, 'project-b', 'com.customer.b');
       final plist = File(
         p.join(project.path, 'ios/Runner/GoogleService-Info.plist'),
@@ -222,9 +221,9 @@ void main() {
     save('customer', 'project-b', 'com.customer.b');
     expect(restore('customer', 'project-b', 'com.customer.b'), isTrue);
     expect(
-      Directory(
-        p.join(project.path, 'clonify/clones/customer'),
-      ).listSync().map((file) => p.basename(file.path)),
+      Directory(p.join(project.path, 'clonify/clones/customer'))
+          .listSync()
+          .map((file) => p.basename(file.path)),
       ['firebase'],
     );
   });
@@ -388,9 +387,8 @@ void main() {
       } else if (invalid == 'symlink') {
         final cached = File(cachePath('lib/firebase_options.dart'));
         cached.deleteSync();
-        Link(
-          cached.path,
-        ).createSync(p.join(project.path, 'lib/firebase_options.dart'));
+        Link(cached.path)
+            .createSync(p.join(project.path, 'lib/firebase_options.dart'));
       } else {
         final file = File(cachePath('firebase.json'));
         final metadata =
@@ -499,9 +497,8 @@ void main() {
       final metadata = readFirebaseFixtureJson(project.path, 'firebase.json');
       metadata['hosting'] = {'public': 'root-hosting'};
       writeFirebaseFixtureJson(project.path, 'firebase.json', metadata);
-      final rootBefore = File(
-        p.join(project.path, 'firebase.json'),
-      ).readAsStringSync();
+      final rootBefore = File(p.join(project.path, 'firebase.json'))
+          .readAsStringSync();
 
       syncFlutterFireMetadata(
         directory: project.path,
@@ -527,39 +524,36 @@ void main() {
       expect(restore('customer', 'project-a', 'com.customer.a'), isTrue);
     });
 
-    test(
-      'preserves custom deployment sections and replaces stale Flutter metadata',
-      () {
-        writeFirebaseFixture(project.path, 'project-a', 'com.customer.a');
-        final expectedFlutter = readFirebaseFixtureJson(
-          project.path,
-          'firebase.json',
-        )['flutter'];
-        final configured = {
-          'hosting': {'public': 'customer-hosting'},
-          'functions': [
-            {'source': 'customer-functions', 'codebase': 'main'},
-          ],
-          'firestore': {'rules': 'customer.rules'},
-          'flutter': {'platforms': 'old-metadata'},
-        };
-        writeFirebaseFixtureJson(
-          project.path,
-          'firebase-custom.json',
-          configured,
-        );
+    test('preserves custom deployment sections and replaces stale Flutter metadata', () {
+      writeFirebaseFixture(project.path, 'project-a', 'com.customer.a');
+      final expectedFlutter = readFirebaseFixtureJson(
+        project.path,
+        'firebase.json',
+      )['flutter'];
+      final configured = {
+        'hosting': {'public': 'customer-hosting'},
+        'functions': [
+          {'source': 'customer-functions', 'codebase': 'main'},
+        ],
+        'firestore': {'rules': 'customer.rules'},
+        'flutter': {'platforms': 'old-metadata'},
+      };
+      writeFirebaseFixtureJson(
+        project.path,
+        'firebase-custom.json',
+        configured,
+      );
 
-        syncFlutterFireMetadata(
-          directory: project.path,
-          firebaseSettingsFilePath: 'firebase-custom.json',
-        );
+      syncFlutterFireMetadata(
+        directory: project.path,
+        firebaseSettingsFilePath: 'firebase-custom.json',
+      );
 
-        expect(readFirebaseFixtureJson(project.path, 'firebase-custom.json'), {
-          ...configured,
-          'flutter': expectedFlutter,
-        });
-      },
-    );
+      expect(readFirebaseFixtureJson(project.path, 'firebase-custom.json'), {
+        ...configured,
+        'flutter': expectedFlutter,
+      });
+    });
 
     for (final invalid in [
       'malformed custom',

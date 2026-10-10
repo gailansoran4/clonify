@@ -3,8 +3,10 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+
 import '../test_utils.dart';
 
 void main() {
@@ -48,9 +50,8 @@ void main() {
 
       // Step 3: Verify configuration
       final config = jsonDecode(
-        File(
-          '${testDir.path}/clonify/clones/client_production/config.json',
-        ).readAsStringSync(),
+        File('${testDir.path}/clonify/clones/client_production/config.json')
+            .readAsStringSync(),
       );
 
       expect(config['clientId'], equals('client_production'));
@@ -120,23 +121,19 @@ void main() {
 
       // Configure for client_dev
       final clonifyDir = Directory('${testDir.path}/clonify');
-      File(
-        '${clonifyDir.path}/last_client.txt',
-      ).writeAsStringSync('client_dev');
+      File('${clonifyDir.path}/last_client.txt')
+          .writeAsStringSync('client_dev');
 
-      var lastClient = File(
-        '${clonifyDir.path}/last_client.txt',
-      ).readAsStringSync();
+      var lastClient = File('${clonifyDir.path}/last_client.txt')
+          .readAsStringSync();
       expect(lastClient, equals('client_dev'));
 
       // Switch to client_prod
-      File(
-        '${clonifyDir.path}/last_client.txt',
-      ).writeAsStringSync('client_prod');
+      File('${clonifyDir.path}/last_client.txt')
+          .writeAsStringSync('client_prod');
 
-      lastClient = File(
-        '${clonifyDir.path}/last_client.txt',
-      ).readAsStringSync();
+      lastClient = File('${clonifyDir.path}/last_client.txt')
+          .readAsStringSync();
       expect(lastClient, equals('client_prod'));
     });
   });
@@ -199,9 +196,8 @@ void main() {
       );
 
       final config = jsonDecode(
-        File(
-          '${testDir.path}/clonify/clones/build_client/config.json',
-        ).readAsStringSync(),
+        File('${testDir.path}/clonify/clones/build_client/config.json')
+            .readAsStringSync(),
       );
 
       expect(config['packageName'], equals('com.company.buildclient'));
@@ -261,9 +257,8 @@ void main() {
       );
 
       final config = jsonDecode(
-        File(
-          '${testDir.path}/clonify/clones/firebase_client/config.json',
-        ).readAsStringSync(),
+        File('${testDir.path}/clonify/clones/firebase_client/config.json')
+            .readAsStringSync(),
       );
 
       expect(config['firebaseProjectId'], equals('firebase-custom-project'));
@@ -327,18 +322,16 @@ void main() {
       );
 
       // Read versions
-      final pubspecContent = File(
-        '${testDir.path}/pubspec.yaml',
-      ).readAsStringSync();
+      final pubspecContent = File('${testDir.path}/pubspec.yaml')
+          .readAsStringSync();
       final config = jsonDecode(
-        File(
-          '${testDir.path}/clonify/clones/version_sync_client/config.json',
-        ).readAsStringSync(),
+        File('${testDir.path}/clonify/clones/version_sync_client/config.json')
+            .readAsStringSync(),
       );
 
-      final pubspecVersion = RegExp(
-        r'version:\s*(.+)',
-      ).firstMatch(pubspecContent)?.group(1);
+      final pubspecVersion = RegExp(r'version:\s*(.+)')
+          .firstMatch(pubspecContent)
+          ?.group(1);
       final configVersion = config['version'];
 
       expect(pubspecVersion?.trim(), equals('1.0.0+1'));
@@ -415,9 +408,8 @@ void main() {
         );
 
         final config = jsonDecode(
-          File(
-            '${testDir.path}/clonify/clones/$env/config.json',
-          ).readAsStringSync(),
+          File('${testDir.path}/clonify/clones/$env/config.json')
+              .readAsStringSync(),
         );
 
         expect(config['clientId'], equals(env));
@@ -427,9 +419,8 @@ void main() {
       }
 
       final prodConfig = jsonDecode(
-        File(
-          '${testDir.path}/clonify/clones/prod/config.json',
-        ).readAsStringSync(),
+        File('${testDir.path}/clonify/clones/prod/config.json')
+            .readAsStringSync(),
       );
       expect(prodConfig['packageName'], equals('com.company.app'));
       expect(prodConfig['baseUrl'], equals('https://api.company.com'));

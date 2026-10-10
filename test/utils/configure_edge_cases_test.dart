@@ -86,17 +86,14 @@ void main() {
           ..writeAsStringSync(
             '<manifest><application></application></manifest>',
           );
-        Directory(
-          'clonify/clones/client_a/android',
-        ).createSync(recursive: true);
-        File(
-          'clonify/clones/client_a/android/upload-keystore.jks',
-        ).writeAsBytesSync([...jksMagicBytes, 0x00]);
-        File(
-          'clonify/clones/client_a/android/key.properties',
-        ).writeAsStringSync(
-          'storePassword=s\nkeyPassword=k\nkeyAlias=upload\nstoreFile=upload-keystore.jks\n',
-        );
+        Directory('clonify/clones/client_a/android')
+            .createSync(recursive: true);
+        File('clonify/clones/client_a/android/upload-keystore.jks')
+            .writeAsBytesSync([...jksMagicBytes, 0x00]);
+        File('clonify/clones/client_a/android/key.properties')
+            .writeAsStringSync(
+              'storePassword=s\nkeyPassword=k\nkeyAlias=upload\nstoreFile=upload-keystore.jks\n',
+            );
         File('android/app/build.gradle.kts')
           ..createSync(recursive: true)
           ..writeAsStringSync('plugins { id("com.android.application") }\n');
@@ -164,26 +161,22 @@ void main() {
           File('flutter_launcher_icons.yaml').writeAsStringSync('NEW_ICONS');
           File('flutter_native_splash.yaml').writeAsStringSync('NEW_SPLASH');
           File('firebase.json').writeAsStringSync('{"old":false}');
-          File(
-            '.firebaserc',
-          ).writeAsStringSync('{"projects":{"default":"new"}}');
+          File('.firebaserc')
+              .writeAsStringSync('{"projects":{"default":"new"}}');
           File('shorebird.yaml').writeAsStringSync('app_id: new');
           File('lib/firebase_options.dart').writeAsStringSync('NEW_FIREBASE');
-          File(
-            'lib/generated/clone_configs.dart',
-          ).writeAsStringSync('NEW_GENERATED');
+          File('lib/generated/clone_configs.dart')
+              .writeAsStringSync('NEW_GENERATED');
           File('assets/images/logo.png').writeAsBytesSync(const [9, 9, 9]);
           File('ios/Runner/Info.plist').writeAsStringSync('NEW_IOS');
-          File(
-            'android/app/src/main/AndroidManifest.xml',
-          ).writeAsStringSync('NEW_ANDROID');
+          File('android/app/src/main/AndroidManifest.xml')
+              .writeAsStringSync('NEW_ANDROID');
           File('macos/Runner/Info.plist').writeAsStringSync('NEW_MAC');
           File('web/index.html').writeAsStringSync('NEW_WEB');
           File('linux/CMakeLists.txt').writeAsStringSync('NEW_LINUX');
           File('windows/CMakeLists.txt').writeAsStringSync('NEW_WINDOWS');
-          File(
-            'clonify/clones/client/config.json',
-          ).writeAsStringSync('{"version":"9.0.0+9"}');
+          File('clonify/clones/client/config.json')
+              .writeAsStringSync('{"version":"9.0.0+9"}');
           throw CustomException('late configure failure');
         }),
         throwsA(isA<ConfigureRolledBackException>()),

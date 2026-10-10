@@ -3,6 +3,7 @@ import 'dart:convert';
 Map<String, String> firebaseManagerFixture({
   String projectId = 'project-a',
   String packageName = 'com.test.clienta',
+  String? iosPackageName,
   String androidId = '1:123456789:android:aaa1',
   String iosId = '1:123456789:ios:bbb1',
 }) {
@@ -21,7 +22,7 @@ class DefaultFirebaseOptions {
     appId: '$iosId',
     messagingSenderId: '123456789',
     projectId: '$projectId',
-    iosBundleId: '$packageName',
+    iosBundleId: '${iosPackageName ?? packageName}',
   );
 }
 ''',
@@ -44,7 +45,7 @@ class DefaultFirebaseOptions {
 <?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
   <key>PROJECT_ID</key><string>$projectId</string>
-  <key>BUNDLE_ID</key><string>$packageName</string>
+  <key>BUNDLE_ID</key><string>${iosPackageName ?? packageName}</string>
   <key>GCM_SENDER_ID</key><string>123456789</string>
   <key>GOOGLE_APP_ID</key><string>$iosId</string>
   <key>API_KEY</key><string>ios-public-api-key</string>

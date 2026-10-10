@@ -28,7 +28,11 @@ void main() {
 
   group('last client helpers', () {
     test('save and get last client id', () async {
-      await saveLastClientId('client_a');
+      File('clonify/clones/client_a/config.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('{}');
+      File('clonify/active_profile.json')
+          .writeAsStringSync(jsonEncode({'clientId': 'client_a'}));
       expect(await getLastClientId(), 'client_a');
     });
 

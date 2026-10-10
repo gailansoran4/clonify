@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'dart:convert';
+
 import 'shorebird_manager.dart';
 
 import 'package:clonify/constants.dart';
@@ -29,7 +30,7 @@ String? readCurrentPackageName() {
   if (cloneConfigFile.existsSync()) {
     final content = cloneConfigFile.readAsStringSync();
     final match = RegExp(
-      r'static const String packageName = "([^"]+)";',
+      r"""static const String (?:androidPackageName|packageName) = ["']([^"']+)["'];""",
     ).firstMatch(content);
     if (match != null) {
       return match.group(1);
@@ -42,9 +43,8 @@ String? readCurrentPackageName() {
     if (!file.existsSync()) {
       continue;
     }
-    final match = RegExp(
-      r'applicationId\s*=\s*"([^"]+)"',
-    ).firstMatch(file.readAsStringSync());
+    final match = RegExp(r'applicationId\s*=\s*"([^"]+)"')
+        .firstMatch(file.readAsStringSync());
     if (match != null) {
       return match.group(1);
     }
@@ -68,12 +68,15 @@ String? readCurrentPackageName() {
 Future<void> runRenamePackage({
   required String appName,
   required String packageName,
+  String? iosPackageName,
 }) async {
   final clonifySettings = getClonifySettings();
   final renameConfigFile = File(Constants.packageRenameConfigFileName);
   final shortBundleName = shortIosBundleName(appName);
   final oldPackageName = readCurrentPackageName();
   final overrideOldPackage = oldPackageName;
+  final oldIosPackage = readIosBundleId();
+  final iosPackage = iosPackageName ?? packageName;
 
   logger.i('✅ Loading ${Constants.packageRenameConfigFileName}...');
   try {
@@ -137,12 +140,12 @@ Future<void> runRenamePackage({
         'package_rename_config',
         'ios',
         'package_name',
-      ], packageName);
+      ], iosPackage);
       _updateOptionalKey(yamlEditor, [
         'package_rename_config',
         'ios',
         'override_old_package',
-      ], overrideOldPackage);
+      ], oldIosPackage);
     }
 
     yamlEditor.update(['package_rename_config', 'web', 'app_name'], appName);

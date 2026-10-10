@@ -22,6 +22,7 @@ bool firebaseOptionsMatchPackage(String packageName) {
 Future<void> createFirebaseProject({
   required String clientId,
   required String packageName,
+  String? iosPackageName,
   required String firebaseProjectId,
   String? firebaseServiceAccount,
 }) async {
@@ -96,6 +97,7 @@ Future<void> addFirebaseToApp({
   required String clientId,
   required String firebaseProjectId,
   required String packageName,
+  String? iosPackageName,
   String? firebaseServiceAccount,
   bool skip = false,
   bool refresh = false,
@@ -112,9 +114,8 @@ Future<void> addFirebaseToApp({
   final optionsFile = File('lib/firebase_options.dart');
   final usesFunctionAccessor =
       optionsFile.existsSync() &&
-      RegExp(
-        r'static\s+FirebaseOptions\s+currentPlatform\s*\(',
-      ).hasMatch(optionsFile.readAsStringSync());
+      RegExp(r'static\s+FirebaseOptions\s+currentPlatform\s*\(')
+          .hasMatch(optionsFile.readAsStringSync());
 
   void preserveAccessor() {
     if (!usesFunctionAccessor || !optionsFile.existsSync()) return;
@@ -131,6 +132,7 @@ Future<void> addFirebaseToApp({
       clientId: clientId,
       firebaseProjectId: firebaseProjectId,
       packageName: packageName,
+      iosPackageName: iosPackageName,
       firebaseSettingsFilePath: firebaseJsonPath,
     )) {
       preserveAccessor();
@@ -142,6 +144,7 @@ Future<void> addFirebaseToApp({
       assertFirebaseConfiguration(
         firebaseProjectId,
         packageName,
+        iosPackageName: iosPackageName,
         firebaseSettingsFilePath: firebaseJsonPath,
       );
       currentConfigurationMatches = true;
@@ -153,6 +156,7 @@ Future<void> addFirebaseToApp({
         clientId: clientId,
         firebaseProjectId: firebaseProjectId,
         packageName: packageName,
+        iosPackageName: iosPackageName,
         firebaseSettingsFilePath: firebaseJsonPath,
       );
       logger.i('✅ Saved existing Firebase configuration for $clientId.');
@@ -184,7 +188,7 @@ Future<void> addFirebaseToApp({
         '--platforms',
         'android,ios',
         '--ios-bundle-id',
-        packageName,
+        iosPackageName ?? packageName,
         '--android-package-name',
         packageName,
         if (credentialPath != null) ...['--service-account', credentialPath],
@@ -216,6 +220,7 @@ Future<void> addFirebaseToApp({
     clientId: clientId,
     firebaseProjectId: firebaseProjectId,
     packageName: packageName,
+    iosPackageName: iosPackageName,
     firebaseSettingsFilePath: firebaseJsonPath,
   );
   logger.i('✅ Firebase configuration saved for $clientId.');

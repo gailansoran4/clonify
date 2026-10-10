@@ -51,6 +51,332 @@ void main() {
       .map((line) => jsonDecode(line) as List)
       .toList();
 
+  test('create prompts separately for platform IDs and writes snake_case', () async {
+    for (final name in ['icon.png', 'splash.png', 'logo.png']) {
+      final source = fixture.file('clonify/clones/alpha/assets/$name');
+      fixture.file('assets/images/$name').parent.createSync(recursive: true);
+      source.copySync(fixture.file('assets/images/$name').path);
+    }
+    fixture.write(
+      'clonify/clonify_settings.yaml',
+      '${fixture.file('clonify/clonify_settings.yaml').readAsStringSync()}\ncustom_fields:\n  - name: is_client_account\n    type: bool\n',
+    );
+    final process = await fixture.start(['create']);
+    final output = process.stdout.transform(utf8.decoder).join();
+    final errors = process.stderr.transform(utf8.decoder).join();
+    process.stdin.write(
+      [
+        'gamma',
+        '',
+        '',
+        'com.example.gamma',
+        'com.example.gamma.ios',
+        'Gamma',
+        '1.0.0+1',
+        'icon.png',
+        'splash.png',
+        '',
+        'logo.png',
+        '',
+        'n',
+        '',
+      ].join('\n'),
+    );
+    await process.stdin.close();
+    expect(
+      await process.exitCode.timeout(const Duration(seconds: 15)),
+      0,
+      reason: '${await output} ${await errors}',
+    );
+    final config = jsonDecode(
+      fixture.file('clonify/clones/gamma/config.json').readAsStringSync(),
+    ) as Map;
+    expect(config['android_package_name'], 'com.example.gamma');
+    expect(config['ios_package_name'], 'com.example.gamma.ios');
+    expect(config.containsKey('base_url'), isFalse);
+    expect(config.containsKey('is_client_account'), isFalse);
+    expect(
+      config.keys.where((key) => RegExp('[A-Z]').hasMatch(key as String)),
+      isEmpty,
+    );
+    success(
+      await fixture.run(['configure', '--client-id', 'gamma', '--skipAll']),
+    );
+  });
+
+  test(
+    'separate platform IDs survive configure, repeat, build and upload',
+    () async {
+      fixture.profile(
+        'alpha',
+        changes: {
+          'androidPackageName': 'com.example.alpha.android',
+          'iosPackageName': 'com.example.alpha.ios',
+        },
+      );
+      fixture.write('ios/Runner.xcodeproj/project.pbxproj', '''
+PRODUCT_BUNDLE_IDENTIFIER = com.old.ios;
+PRODUCT_BUNDLE_IDENTIFIER = com.old.ios.RunnerTests;
+PRODUCT_BUNDLE_IDENTIFIER = com.old.ios.NotificationExtension;
+''');
+      fixture.file('clonify/last_client.txt').deleteSync();
+      success(await fixture.run(configure));
+      success(await fixture.run(['configure', '--skipAll']));
+      expect(fixture.file('clonify/last_client.txt').existsSync(), isFalse);
+      expect(
+        fixture.file('android/app/build.gradle.kts').readAsStringSync(),
+        contains('com.example.alpha.android'),
+      );
+      final ios = fixture
+          .file('ios/Runner.xcodeproj/project.pbxproj')
+          .readAsStringSync();
+      expect(ios, contains('com.example.alpha.ios;'));
+      expect(ios, contains('com.example.alpha.ios.RunnerTests'));
+      expect(ios, contains('com.example.alpha.ios.NotificationExtension'));
+      success(await fixture.run(['build', '--skipAll']));
+      success(await fixture.run(['upload', '--skipAll']));
+      expect(
+        fixture.file('tool-upload-android').readAsStringSync(),
+        contains('com.example.alpha.android'),
+      );
+      expect(
+        fixture.file('tool-upload-ios').readAsStringSync(),
+        contains('com.example.alpha.ios'),
+      );
+      final output = await fixture.run(['which']);
+      success(output);
+      expect(
+        '${output.stdout}',
+        contains('iOS Bundle ID: com.example.alpha.ios'),
+      );
+    },
+  );
+
+  test(
+    'explicit selection ignores a stale text marker and corrupt active receipt',
+    () async {
+      fixture.write('clonify/last_client.txt', '../../wrong');
+      fixture.write('clonify/active_profile.json', '{broken');
+      success(
+        await fixture.run(['configure', '--client-id', 'alpha', '--skipAll']),
+      );
+      success(await fixture.run(buildAndroid));
+      expect(
+        fixture.file('clonify/last_client.txt').readAsStringSync(),
+        '../../wrong',
+      );
+    },
+  );
+
+  test(
+    'one profile is inferred; multiple unconfigured profiles require selection',
+    () async {
+      fixture.file('clonify/last_client.txt').deleteSync();
+      final ambiguous = await fixture.run(['configure', '--skipAll']);
+      expect(ambiguous.exitCode, 1);
+      expect('${ambiguous.stderr}', contains('--clientId'));
+      fixture
+          .file('clonify/clones/beta/config.json')
+          .parent
+          .deleteSync(recursive: true);
+      success(await fixture.run(['configure', '--skipAll']));
+      success(await fixture.run(['build', '--skipAll', '--no-buildIpa']));
+    },
+  );
+
+  test('minimal snake_case profile configures without optional integrations or licenses', () async {
+    fixture.write(
+      'clonify/clones/alpha/config.json',
+      jsonEncode({
+        'client_id': 'alpha',
+        'android_package_name': 'com.example.alpha',
+        'ios_package_name': 'com.example.alpha.ios',
+        'app_name': 'Alpha',
+        'version': '2.1.0+42',
+        'logo': 'logo.png',
+        'launcher_icon': 'icon.png',
+        'splash_screen': 'splash.png',
+      }),
+    );
+    fixture.write(
+      'clonify/clonify_settings.yaml',
+      '${fixture.file('clonify/clonify_settings.yaml').readAsStringSync().replaceAll('enabled: false', 'enabled: true')}\ncustom_fields:\n  - name: is_client_account\n    type: bool\n',
+    );
+    fixture.write(
+      'android/app/src/main/AndroidManifest.xml',
+      '<manifest><application android:label="Old"><meta-data android:name="com.transistorsoft.locationmanager.license" android:value="OLD" /></application></manifest>',
+    );
+    fixture.write(
+      'ios/Runner/Info.plist',
+      '<plist><dict><key>CFBundleDisplayName</key><string>Old</string><key>CFBundleName</key><string>Old</string><key>TSLocationManagerLicense</key><string>OLD</string></dict></plist>',
+    );
+    success(
+      await fixture.run([
+        'configure',
+        '--client-id',
+        'alpha',
+        '--skipVersionUpdate',
+      ]),
+    );
+    expect(
+      fixture.file('pubspec.yaml').readAsStringSync(),
+      contains('2.1.0+42'),
+    );
+    expect(
+      fixture
+          .file('android/app/src/main/AndroidManifest.xml')
+          .readAsStringSync(),
+      isNot(contains('locationmanager.license')),
+    );
+    expect(
+      fixture.file('ios/Runner/Info.plist').readAsStringSync(),
+      isNot(contains('TSLocationManagerLicense')),
+    );
+    expect(
+      calls().any(
+        (call) => ['flutterfire', 'firebase', 'shorebird'].contains(call.first),
+      ),
+      isFalse,
+    );
+    success(await fixture.run(['build', '--skipAll', '--no-buildIpa']));
+  });
+
+  test('custom fields and colors retain identity after canonical profile migration', () async {
+    fixture.write(
+      'clonify/clonify_settings.yaml',
+      '${fixture.file('clonify/clonify_settings.yaml').readAsStringSync()}\ncustom_fields:\n  - name: is_client_account\n    type: bool\n',
+    );
+    fixture.profile(
+      'alpha',
+      changes: {
+        'isClientAccount': true,
+        'colors': [
+          {'name': 'accentColor', 'color': 'AABBCC'},
+        ],
+      },
+    );
+    success(await fixture.run(configure));
+    final disk = jsonDecode(
+      fixture.file('clonify/clones/alpha/config.json').readAsStringSync(),
+    ) as Map;
+    expect(disk['is_client_account'], true);
+    expect(disk['colors'][0]['name'], 'accent_color');
+    expect(disk.containsKey('packageName'), isFalse);
+    final generated = fixture
+        .file('lib/generated/clone_configs.dart')
+        .readAsStringSync();
+    expect(generated, contains('static const bool isClientAccount = true;'));
+    expect(
+      generated,
+      contains('static const accentColor = Color(0xFFAABBCC);'),
+    );
+    success(await fixture.run(buildAndroid));
+    success(await fixture.run(configure));
+    success(await fixture.run(buildAndroid));
+  });
+
+  test(
+    'Firebase online arguments, cache and restore use separate IDs',
+    () async {
+      fixture.write(
+        'clonify/clonify_settings.yaml',
+        fixture
+            .file('clonify/clonify_settings.yaml')
+            .readAsStringSync()
+            .replaceFirst('enabled: false', 'enabled: true'),
+      );
+      fixture.profile(
+        'alpha',
+        changes: {
+          'iosPackageName': 'com.example.alpha.ios',
+          'firebaseProjectId': 'project-a',
+        },
+      );
+      final fresh = firebaseManagerFixture(
+        projectId: 'project-a',
+        packageName: 'com.example.alpha',
+        iosPackageName: 'com.example.alpha.ios',
+      );
+      fixture.write('tool-firebase-fixture.json', jsonEncode(fresh));
+      success(
+        await fixture.run([
+          'configure',
+          '--client-id',
+          'alpha',
+          '--skipVersionUpdate',
+          '--refreshFirebase',
+        ]),
+      );
+      final invocation = calls().singleWhere(
+        (call) => call.first == 'flutterfire',
+      );
+      expect(
+        invocation[invocation.indexOf('--android-package-name') + 1],
+        'com.example.alpha',
+      );
+      expect(
+        invocation[invocation.indexOf('--ios-bundle-id') + 1],
+        'com.example.alpha.ios',
+      );
+      fixture.file('lib/firebase_options.dart').deleteSync();
+      success(await fixture.run(configure));
+      expect(
+        calls().where((call) => call.first == 'flutterfire'),
+        hasLength(1),
+      );
+      success(await fixture.run(buildAndroid));
+      fixture.profile(
+        'alpha',
+        changes: {
+          'iosPackageName': 'com.example.alpha.wrong',
+          'firebaseProjectId': 'project-a',
+        },
+      );
+      final before = fixture.snapshot();
+      final result = await fixture.run(configure);
+      expect(result.exitCode, 1);
+      expect('${result.stderr}', contains('iOS bundle ID'));
+      expect(fixture.snapshot(), before);
+    },
+  );
+
+  test(
+    'Shorebird validates the selected platform with independent IDs',
+    () async {
+      fixture.write(
+        'clonify/clonify_settings.yaml',
+        fixture
+            .file('clonify/clonify_settings.yaml')
+            .readAsStringSync()
+            .replaceFirst(
+              'shorebird:\n  enabled: false',
+              'shorebird:\n  enabled: true',
+            ),
+      );
+      fixture.profile(
+        'alpha',
+        changes: {
+          'iosPackageName': 'com.example.alpha.ios',
+          'shorebirdAppId': 'test-shorebird-app',
+        },
+      );
+      fixture.write('shorebird.yaml', 'app_id: old\n');
+      for (final platform in ['android', 'ios']) {
+        success(
+          await fixture.run([
+            'shorebird',
+            '--client-id',
+            'alpha',
+            '--',
+            'release',
+            platform,
+          ]),
+        );
+      }
+      expect(calls().where((call) => call.first == 'shorebird'), hasLength(2));
+    },
+  );
+
   test(
     'skipAll reuses the selected profile for configure, build and upload',
     () async {
@@ -113,6 +439,10 @@ void main() {
   test(
     'doctor and dry-run validate without project mutations or subprocesses',
     () async {
+      final help = await fixture.run(['configure', '--help']);
+      success(help);
+      expect('${help.stdout}', contains('--client-id'));
+      expect('${help.stdout}', isNot(contains('\x1b[')));
       final before = fixture.snapshot();
       success(await fixture.run(['doctor']));
       success(await fixture.run([...configure, '--dry-run']));
@@ -171,11 +501,19 @@ void main() {
   );
 
   test(
-    'configure applies profile, awaits selected marker and preserves custom native source',
+    'configure records active profile and preserves custom native source',
     () async {
-      success(await fixture.run(configure));
+      final configured = await fixture.run(configure);
+      success(configured);
+      expect('${configured.stdout}', isNot(contains('\x1b[')));
       expect(
-        fixture.file('clonify/last_client.txt').readAsStringSync(),
+        '${configured.stdout}',
+        contains('Generated: lib/generated/clone_configs.dart'),
+      );
+      expect(
+        jsonDecode(
+          fixture.file('clonify/active_profile.json').readAsStringSync(),
+        )['clientId'],
         'alpha',
       );
       expect(
@@ -233,7 +571,7 @@ void main() {
     () async {
       fixture.write(
         'ios/Runner.xcodeproj/project.pbxproj',
-        'PRODUCT_BUNDLE_IDENTIFIER = com.unrelated.app;',
+        '// malformed Xcode project: missing bundle ID',
       );
       final before = fixture.snapshot();
       final result = await fixture.run(configure);
@@ -249,13 +587,9 @@ void main() {
       success(await fixture.run([...buildAndroid, '--buildApk']));
       final builds = calls().where((call) => call.first == 'flutter').toList();
       expect(builds.map((call) => call[2]), ['apk', 'appbundle']);
-      final receipt =
-          jsonDecode(
-                fixture
-                    .file('.dart_tool/clonify/builds/alpha.json')
-                    .readAsStringSync(),
-              )
-              as Map;
+      final receipt = jsonDecode(
+        fixture.file('.dart_tool/clonify/builds/alpha.json').readAsStringSync(),
+      ) as Map;
       expect(receipt.keys, containsAll(['apk', 'appbundle']));
       success(
         await fixture.run([
@@ -529,26 +863,23 @@ void main() {
     skip: Platform.isMacOS ? false : 'IPA builds require macOS',
   );
 
-  test(
-    'read-only dry-run rejects incompatible flags and wrong profile field types',
-    () async {
-      final before = fixture.snapshot();
-      expect(
-        (await fixture.run([
-          ...configure,
-          '--dry-run',
-          '--refreshFirebase',
-          '--skipFirebaseConfigure',
-        ])).exitCode,
-        1,
-      );
-      expect(fixture.snapshot(), before);
-      fixture.profile('alpha', changes: {'version': 3});
-      final result = await fixture.run([...configure, '--dry-run']);
-      expect(result.exitCode, 1);
-      expect('${result.stderr}', contains('must be a string'));
-    },
-  );
+  test('read-only dry-run rejects incompatible flags and wrong profile field types', () async {
+    final before = fixture.snapshot();
+    expect(
+      (await fixture.run([
+        ...configure,
+        '--dry-run',
+        '--refreshFirebase',
+        '--skipFirebaseConfigure',
+      ])).exitCode,
+      1,
+    );
+    expect(fixture.snapshot(), before);
+    fixture.profile('alpha', changes: {'version': 3});
+    final result = await fixture.run([...configure, '--dry-run']);
+    expect(result.exitCode, 1);
+    expect('${result.stderr}', contains('must be a string'));
+  });
 
   test(
     'end of input cancels interactive commands without changing files',
@@ -577,65 +908,57 @@ void main() {
     }
   }
 
-  test(
-    'lock rejects a second mutation; SIGINT rolls back and kills generator children',
-    () async {
-      final before = fixture.snapshot();
-      final process = await fixture.start(
-        configure,
-        env: {'CLONIFY_TEST_WAIT': '1', 'CLONIFY_TEST_CHILD': '1'},
-      );
-      final output = process.stdout.drain<void>();
-      final error = process.stderr.drain<void>();
-      addTearDown(() {
-        process.kill(ProcessSignal.sigkill);
-      });
-      await waitForFile('tool-ready');
-      await waitForFile('tool-worker-ready');
-      final second = await fixture.run(configure);
-      expect(second.exitCode, 1);
-      expect('${second.stderr}', contains('Another Clonify command'));
-      process.kill(ProcessSignal.sigint);
-      expect(await process.exitCode.timeout(const Duration(seconds: 10)), 130);
-      await output;
-      await error;
-      await Future<void>.delayed(const Duration(seconds: 3));
-      expect(fixture.snapshot(), before);
-      expect(fixture.file(recoveryJournalPath).existsSync(), isFalse);
-    },
-    skip: Platform.isWindows ? 'POSIX signal test' : false,
-  );
-
-  test(
-    'SIGKILL leaves durable recovery; recover restores without settings validation',
-    () async {
-      final before = fixture.snapshot();
-      final process = await fixture.start(
-        configure,
-        env: {'CLONIFY_TEST_WAIT': '1'},
-      );
-      unawaited(process.stdout.drain<void>());
-      unawaited(process.stderr.drain<void>());
-      addTearDown(() {
-        process.kill(ProcessSignal.sigkill);
-      });
-      await waitForFile('tool-ready');
-      // Kill the generator too: SIGKILL cannot run cancellation handlers.
-      final generatorPid = int.parse(
-        fixture.file('tool-ready').readAsStringSync(),
-      );
-      Process.killPid(generatorPid, ProcessSignal.sigkill);
+  test('lock rejects a second mutation; SIGINT rolls back and kills generator children', () async {
+    final before = fixture.snapshot();
+    final process = await fixture.start(
+      configure,
+      env: {'CLONIFY_TEST_WAIT': '1', 'CLONIFY_TEST_CHILD': '1'},
+    );
+    final output = process.stdout.drain<void>();
+    final error = process.stderr.drain<void>();
+    addTearDown(() {
       process.kill(ProcessSignal.sigkill);
-      await process.exitCode;
-      expect(fixture.file(recoveryJournalPath).existsSync(), isTrue);
-      final blocked = await fixture.run(configure);
-      expect(blocked.exitCode, 1);
-      expect('${blocked.stderr}', contains('clonify recover'));
-      fixture.write('clonify/clonify_settings.yaml', 'broken settings');
-      success(await fixture.run(['recover']));
-      expect(fixture.snapshot(), before);
-      success(await fixture.run(['recover']));
-    },
-    skip: Platform.isWindows ? 'POSIX signal test' : false,
-  );
+    });
+    await waitForFile('tool-ready');
+    await waitForFile('tool-worker-ready');
+    final second = await fixture.run(configure);
+    expect(second.exitCode, 1);
+    expect('${second.stderr}', contains('Another Clonify command'));
+    process.kill(ProcessSignal.sigint);
+    expect(await process.exitCode.timeout(const Duration(seconds: 10)), 130);
+    await output;
+    await error;
+    await Future<void>.delayed(const Duration(seconds: 3));
+    expect(fixture.snapshot(), before);
+    expect(fixture.file(recoveryJournalPath).existsSync(), isFalse);
+  }, skip: Platform.isWindows ? 'POSIX signal test' : false);
+
+  test('SIGKILL leaves durable recovery; recover restores without settings validation', () async {
+    final before = fixture.snapshot();
+    final process = await fixture.start(
+      configure,
+      env: {'CLONIFY_TEST_WAIT': '1'},
+    );
+    unawaited(process.stdout.drain<void>());
+    unawaited(process.stderr.drain<void>());
+    addTearDown(() {
+      process.kill(ProcessSignal.sigkill);
+    });
+    await waitForFile('tool-ready');
+    // Kill the generator too: SIGKILL cannot run cancellation handlers.
+    final generatorPid = int.parse(
+      fixture.file('tool-ready').readAsStringSync(),
+    );
+    Process.killPid(generatorPid, ProcessSignal.sigkill);
+    process.kill(ProcessSignal.sigkill);
+    await process.exitCode;
+    expect(fixture.file(recoveryJournalPath).existsSync(), isTrue);
+    final blocked = await fixture.run(configure);
+    expect(blocked.exitCode, 1);
+    expect('${blocked.stderr}', contains('clonify recover'));
+    fixture.write('clonify/clonify_settings.yaml', 'broken settings');
+    success(await fixture.run(['recover']));
+    expect(fixture.snapshot(), before);
+    success(await fixture.run(['recover']));
+  }, skip: Platform.isWindows ? 'POSIX signal test' : false);
 }

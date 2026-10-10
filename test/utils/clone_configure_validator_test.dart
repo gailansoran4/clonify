@@ -37,7 +37,7 @@ void main() {
       );
     });
 
-    test('throws when iOS license key is missing', () {
+    test('accepts when iOS license key is missing', () {
       expect(
         () => assertBackgroundGeolocationLicenses({
           'packageName': 'com.app',
@@ -46,13 +46,7 @@ void main() {
             appId: 'com.app',
           ),
         }),
-        throwsA(
-          isA<CustomException>().having(
-            (error) => error.message,
-            'message',
-            contains('backgroundGeolocationLicenseIos is not set'),
-          ),
-        ),
+        returnsNormally,
       );
     });
 
@@ -70,13 +64,13 @@ void main() {
           isA<CustomException>().having(
             (error) => error.message,
             'message',
-            contains('backgroundGeolocationLicenseIos is not set'),
+            contains('backgroundGeolocationLicenseIos must be a non-empty JWT'),
           ),
         ),
       );
     });
 
-    test('throws when Android license is missing', () {
+    test('accepts when Android license is missing', () {
       expect(
         () => assertBackgroundGeolocationLicenses({
           'packageName': 'com.app',
@@ -85,13 +79,7 @@ void main() {
             appId: 'com.app',
           ),
         }),
-        throwsA(
-          isA<CustomException>().having(
-            (error) => error.message,
-            'message',
-            contains('backgroundGeolocationLicenseAndroid is not set'),
-          ),
-        ),
+        returnsNormally,
       );
     });
 
@@ -109,23 +97,19 @@ void main() {
           isA<CustomException>().having(
             (error) => error.message,
             'message',
-            contains('backgroundGeolocationLicenseAndroid is not set'),
+            contains(
+              'backgroundGeolocationLicenseAndroid must be a non-empty JWT',
+            ),
           ),
         ),
       );
     });
 
-    test('throws when both license keys are omitted', () {
+    test('accepts when both license keys are omitted', () {
       writeNativeLicenseSlots();
       expect(
         () => assertBackgroundGeolocationLicenses({'packageName': 'com.app'}),
-        throwsA(
-          isA<CustomException>().having(
-            (error) => error.message,
-            'message',
-            contains('backgroundGeolocationLicenseAndroid is not set'),
-          ),
-        ),
+        returnsNormally,
       );
     });
 
@@ -145,7 +129,7 @@ void main() {
           isA<CustomException>().having(
             (error) => error.message,
             'message',
-            contains('packageName is not set'),
+            contains('android_package_name is not set'),
           ),
         ),
       );
@@ -266,17 +250,11 @@ void main() {
       );
     });
 
-    test('requires licenses when native slots already exist', () {
+    test('does not require omitted licenses even with native slots', () {
       writeNativeLicenseSlots();
       expect(
         () => assertBackgroundGeolocationLicenses({'packageName': 'com.app'}),
-        throwsA(
-          isA<CustomException>().having(
-            (error) => error.message,
-            'message',
-            contains('backgroundGeolocationLicenseAndroid is not set'),
-          ),
-        ),
+        returnsNormally,
       );
     });
   });
@@ -562,7 +540,7 @@ void main() {
           isA<CustomException>().having(
             (error) => error.message,
             'message',
-            contains('TSLocationManagerLicense'),
+            contains('backgroundGeolocationLicenseIos'),
           ),
         ),
       );
@@ -722,15 +700,13 @@ void main() {
   });
 
   group('assertConfigureReady omitted keys', () {
-    test('fails when any required branding or license key is omitted', () {
+    test('fails when any required branding key is omitted', () {
       writeCloneAssets();
       const requiredKeys = [
         'launcherIcon',
         'splashScreen',
         'logo',
         'packageName',
-        backgroundGeolocationLicenseAndroidKey,
-        backgroundGeolocationLicenseIosKey,
       ];
       for (final field in requiredKeys) {
         final config = validLicensedConfig()..remove(field);
@@ -742,15 +718,13 @@ void main() {
       }
     });
 
-    test('fails when any required branding or license key is blank', () {
+    test('fails when any required branding key is blank', () {
       writeCloneAssets();
       const requiredKeys = [
         'launcherIcon',
         'splashScreen',
         'logo',
         'packageName',
-        backgroundGeolocationLicenseAndroidKey,
-        backgroundGeolocationLicenseIosKey,
       ];
       for (final field in requiredKeys) {
         final config = validLicensedConfig()..[field] = '';

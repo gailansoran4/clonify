@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'command_process.dart';
 
 import 'package:clonify/constants.dart';
@@ -84,9 +85,8 @@ String? readAndroidApplicationId() {
       : null;
   if (file == null) return null;
 
-  final match = RegExp(
-    r'''applicationId\s*(?:=|:)?\s*["']([^"']+)["']''',
-  ).firstMatch(file.readAsStringSync());
+  final match = RegExp(r'''applicationId\s*(?:=|:)?\s*["']([^"']+)["']''')
+      .firstMatch(file.readAsStringSync());
   return match?.group(1);
 }
 
@@ -95,9 +95,8 @@ String? readIosBundleId() {
   final file = File(Constants.iosProjectFilePath);
   if (!file.existsSync()) return null;
 
-  final match = RegExp(
-    r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([^;]+);',
-  ).firstMatch(file.readAsStringSync());
+  final match = RegExp(r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([^;]+);')
+      .firstMatch(file.readAsStringSync());
   return match?.group(1)?.trim().replaceAll('"', '');
 }
 
@@ -106,6 +105,7 @@ String? readIosBundleId() {
 void assertBundleIdMatches({
   required List<String> shorebirdArgs,
   required String expectedPackageName,
+  String? expectedIosPackageName,
 }) {
   final lowerArgs = shorebirdArgs.map((a) => a.toLowerCase()).toList();
 
@@ -119,10 +119,11 @@ void assertBundleIdMatches({
   }
 
   if (lowerArgs.contains('ios')) {
+    final expected = expectedIosPackageName ?? expectedPackageName;
     final current = readIosBundleId();
-    if (current != expectedPackageName) {
+    if (current != expected) {
       throw CustomException(
-        'iOS bundle id is "$current" but clone needs "$expectedPackageName".',
+        'iOS bundle id is "$current" but clone needs "$expected".',
       );
     }
   }

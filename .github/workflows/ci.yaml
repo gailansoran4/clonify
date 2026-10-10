@@ -14,7 +14,7 @@ jobs:
         sdk: [stable]
         include:
           - os: ubuntu-latest
-            sdk: '3.8.1'
+            sdk: '3.13.0'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:

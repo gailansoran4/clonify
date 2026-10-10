@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../utils/profile_schema.dart';
+
 import 'package:args/command_runner.dart';
 
 import '../custom_exceptions.dart';
@@ -15,7 +17,9 @@ import '../utils/project_lock.dart';
 
 void printConfigurePlan(ConfigurePlan plan, String clientId) {
   print('Profile: $clientId');
-  print('Application: ${plan.config['packageName']}');
+  print('Application: ${plan.config['appName']}');
+  print('Android package: ${androidPackageName(plan.config)}');
+  print('iOS bundle ID: ${iosPackageName(plan.config)}');
   print(
     'Firebase project: ${plan.config['firebaseProjectId'] ?? '(disabled)'}',
   );
@@ -154,7 +158,8 @@ class FirebaseRefreshCommand extends Command<void> {
       await addFirebaseToApp(
         clientId: clientId,
         firebaseProjectId: config['firebaseProjectId'] as String,
-        packageName: config['packageName'] as String,
+        packageName: androidPackageName(config),
+        iosPackageName: iosPackageName(config),
         firebaseServiceAccount: config['firebaseServiceAccount'] as String?,
         refresh: true,
       );

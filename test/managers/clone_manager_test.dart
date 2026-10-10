@@ -3,8 +3,10 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+
 import '../test_utils.dart';
 
 void main() {
@@ -63,9 +65,8 @@ void main() {
 
       // Create invalid config (missing required fields)
       final invalidConfig = {'clientId': TestFixtures.defaultClientId};
-      File(
-        '${cloneDir.path}/config.json',
-      ).writeAsStringSync(jsonEncode(invalidConfig));
+      File('${cloneDir.path}/config.json')
+          .writeAsStringSync(jsonEncode(invalidConfig));
 
       final configPath = '${cloneDir.path}/config.json';
       TestAssertions.assertFileExists(configPath);
@@ -142,14 +143,12 @@ void main() {
 
       // Verify configs are different
       final configA = jsonDecode(
-        File(
-          '${testDir.path}/clonify/clones/client_a/config.json',
-        ).readAsStringSync(),
+        File('${testDir.path}/clonify/clones/client_a/config.json')
+            .readAsStringSync(),
       );
       final configB = jsonDecode(
-        File(
-          '${testDir.path}/clonify/clones/client_b/config.json',
-        ).readAsStringSync(),
+        File('${testDir.path}/clonify/clones/client_b/config.json')
+            .readAsStringSync(),
       );
 
       expect(configA['clientId'], equals('client_a'));
@@ -184,9 +183,8 @@ abstract class CloneConfigs {
 }
 ''';
 
-      File(
-        '${generatedDir.path}/clone_configs.dart',
-      ).writeAsStringSync(generatedContent);
+      File('${generatedDir.path}/clone_configs.dart')
+          .writeAsStringSync(generatedContent);
 
       // Verify generated file
       TestAssertions.assertFileExists(
@@ -219,9 +217,8 @@ abstract class CloneConfigs {
         {'name': 'errorRed', 'color': 'B00020'},
       ];
 
-      File(
-        '${cloneDir.path}/config.json',
-      ).writeAsStringSync(jsonEncode(config));
+      File('${cloneDir.path}/config.json')
+          .writeAsStringSync(jsonEncode(config));
 
       // Verify config saved correctly
       final savedConfig = jsonDecode(
@@ -240,9 +237,8 @@ abstract class CloneConfigs {
       cloneDir.createSync(recursive: true);
 
       final config = TestFixtures.sampleCloneConfig();
-      File(
-        '${cloneDir.path}/config.json',
-      ).writeAsStringSync(jsonEncode(config));
+      File('${cloneDir.path}/config.json')
+          .writeAsStringSync(jsonEncode(config));
 
       final savedConfig = jsonDecode(
         File('${cloneDir.path}/config.json').readAsStringSync(),
@@ -265,9 +261,8 @@ abstract class CloneConfigs {
       );
 
       // Read pubspec version
-      final pubspecContent = File(
-        '${testDir.path}/pubspec.yaml',
-      ).readAsStringSync();
+      final pubspecContent = File('${testDir.path}/pubspec.yaml')
+          .readAsStringSync();
       expect(pubspecContent.contains('version: 1.0.0+1'), isTrue);
 
       // Read config version

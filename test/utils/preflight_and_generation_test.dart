@@ -73,16 +73,12 @@ void main() {
   });
 
   test('settings validate optional booleans and custom field types', () {
-    final settings =
-        loadYaml(
-              fixture.file('clonify/clonify_settings.yaml').readAsStringSync(),
-            )
-            as YamlMap;
-    final malformed =
-        loadYaml(
-              '${fixture.file('clonify/clonify_settings.yaml').readAsStringSync()}\ncustom_fields: [wrong]\n',
-            )
-            as YamlMap;
+    final settings = loadYaml(
+      fixture.file('clonify/clonify_settings.yaml').readAsStringSync(),
+    ) as YamlMap;
+    final malformed = loadYaml(
+      '${fixture.file('clonify/clonify_settings.yaml').readAsStringSync()}\ncustom_fields: [wrong]\n',
+    ) as YamlMap;
     expect(ClonifySettings.fromYaml(settings).firebaseEnabled, isFalse);
     expect(
       () => ClonifySettings.fromYaml(malformed),
@@ -110,7 +106,7 @@ void main() {
       final output = fixture
           .file('lib/generated/clone_configs.dart')
           .readAsStringSync();
-      expect(output, contains(r'Café \"Alpha\" \$value'));
+      expect(output, contains(r'Café "Alpha" \$value'));
       expect(output, contains(r'https://example.com/\$customer'));
     },
   );
@@ -142,37 +138,29 @@ void main() {
     expect(() => readCloneProfile('alpha'), throwsA(isA<CustomException>()));
   });
 
-  test(
-    'optional disabled services and missing optional assets stay optional',
-    () {
-      fixture.write('pubspec.yaml', 'name: fixture\nversion: 1.0.0+1\n');
-      fixture.write(
-        'clonify/clonify_settings.yaml',
-        fixture
-            .file('clonify/clonify_settings.yaml')
-            .readAsStringSync()
-            .replaceAll(
-              'needs_launcher_icon: true',
-              'needs_launcher_icon: false',
-            )
-            .replaceAll(
-              'needs_splash_screen: true',
-              'needs_splash_screen: false',
-            )
-            .replaceAll('needs_logo: true', 'needs_logo: false'),
-      );
-      fixture.profile(
-        'alpha',
-        changes: {'launcherIcon': null, 'splashScreen': null, 'logo': null},
-      );
-      Directory('clonify/clones/alpha/assets').deleteSync(recursive: true);
-      final plan = inspectConfigure(
-        ConfigureCommandModel()..clientId = 'alpha',
-      );
-      expect(plan.assetFields, isEmpty);
-      expect(plan.firebaseMode, FirebaseSetupMode.disabled);
-    },
-  );
+  test('disabled generators keep core branding fields required', () {
+    fixture.write('pubspec.yaml', 'name: fixture\nversion: 1.0.0+1\n');
+    fixture.write(
+      'clonify/clonify_settings.yaml',
+      fixture
+          .file('clonify/clonify_settings.yaml')
+          .readAsStringSync()
+          .replaceAll('needs_launcher_icon: true', 'needs_launcher_icon: false')
+          .replaceAll('needs_splash_screen: true', 'needs_splash_screen: false')
+          .replaceAll('needs_logo: true', 'needs_logo: false'),
+    );
+    final plan = inspectConfigure(ConfigureCommandModel()..clientId = 'alpha');
+    expect(
+      plan.assetFields,
+      containsAll(['logo', 'launcherIcon', 'splashScreen']),
+    );
+    expect(plan.firebaseMode, FirebaseSetupMode.disabled);
+    fixture.profile('alpha', changes: {'logo': null});
+    expect(
+      () => inspectConfigure(ConfigureCommandModel()..clientId = 'alpha'),
+      throwsA(isA<CustomException>()),
+    );
+  });
 
   test(
     'symlink escapes and reserved checkpoint paths fail before mutation',

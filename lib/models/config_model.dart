@@ -1,4 +1,5 @@
 import 'color_model.dart';
+import '../utils/profile_schema.dart';
 import '../custom_exceptions.dart';
 
 /// Represents the complete configuration for a Flutter project clone.
@@ -29,7 +30,11 @@ class CloneConfigModel {
   late final String? primaryColor;
 
   /// The Android/iOS package name (e.g., 'com.example.app').
-  late final String? packageName;
+  late final String? androidPackageName;
+  late final String? iosPackageName;
+
+  @Deprecated('Use androidPackageName or iosPackageName.')
+  String? get packageName => androidPackageName;
 
   /// The launcher icon filename.
   late final String? launcherIcon;
@@ -88,7 +93,9 @@ class CloneConfigModel {
   ///
   /// Returns true if both [appName] and [packageName] are non-empty strings.
   bool get isValid =>
-      (appName?.isNotEmpty ?? false) && (packageName?.isNotEmpty ?? false);
+      (appName?.isNotEmpty ?? false) &&
+      (androidPackageName?.isNotEmpty ?? false) &&
+      (iosPackageName?.isNotEmpty ?? false);
 
   /// Creates a [CloneConfigModel] instance from a JSON object.
   ///
@@ -108,8 +115,9 @@ class CloneConfigModel {
     if (source is! Map<String, dynamic>) {
       throw CustomException('Clone configuration must be a JSON object.');
     }
+    final config = normalizeProfile(source);
     String? text(String field) {
-      final value = source[field];
+      final value = config[field];
       if (value != null && value is! String) {
         throw CustomException('Clone field "$field" must be a string.');
       }
@@ -119,7 +127,8 @@ class CloneConfigModel {
     clientId = text('clientId');
     appName = text('appName');
     primaryColor = text('primaryColor');
-    packageName = text('packageName');
+    androidPackageName = text('androidPackageName');
+    iosPackageName = text('iosPackageName');
     baseUrl = text('baseUrl');
     version = text('version') ?? '1.0.0+1';
     launcherIcon = text('launcherIcon');
@@ -137,7 +146,7 @@ class CloneConfigModel {
     backgroundGeolocationLicenseIos = text('backgroundGeolocationLicenseIos');
     androidKeystore = text('androidKeystore');
     androidKeyProperties = text('androidKeyProperties');
-    final rawColors = source['colors'];
+    final rawColors = config['colors'];
     if (rawColors != null && rawColors is! List) {
       throw CustomException('Clone field "colors" must be a list.');
     }

@@ -62,7 +62,7 @@ Clonify manages a multi-stage workflow for creating and managing client-specific
 
 **Client ID Management**:
 - Client ID is the primary identifier for all clone operations
-- Stored in `./clonify/last_client.txt` for convenience
+- Resolved from an explicit ID, the verified `./clonify/active_profile.json` receipt, or a single available profile
 - Commands prompt to reuse last client ID if not explicitly provided
 - Configuration saved to `./clonify/last_config.json`
 
@@ -111,7 +111,7 @@ clonify/
 - `./clonify/clones/<clientId>/config.json`: Per-client configuration
 - `./clonify/clones/<clientId>/assets/`: Per-client assets
 - `./clonify/clones/<clientId>/android/`: Per-client Play keystore + `key.properties`
-- `./clonify/last_client.txt`: Last used client ID
+- `./clonify/active_profile.json`: Verified active profile receipt
 - `./clonify/last_config.json`: Last applied configuration
 - `./lib/generated/clone_configs.dart`: Generated constants (auto-created during `configure`)
 

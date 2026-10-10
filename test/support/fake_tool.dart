@@ -16,9 +16,8 @@ Future<void> main(List<String> arguments) async {
     return;
   }
   final command = arguments.join(' ');
-  File(
-    '$root/tool-calls.jsonl',
-  ).writeAsStringSync('${jsonEncode(arguments)}\n', mode: FileMode.append);
+  File('$root/tool-calls.jsonl')
+      .writeAsStringSync('${jsonEncode(arguments)}\n', mode: FileMode.append);
   if (Platform.environment['CLONIFY_TEST_WAIT'] == '1' &&
       arguments.first == 'dart') {
     write('ios/Runner/partial-generator.txt', 'partial');
@@ -76,9 +75,9 @@ Future<void> main(List<String> arguments) async {
       contents,
     );
   } else if (arguments.first == 'flutterfire') {
-    final fixture =
-        jsonDecode(File('$root/tool-firebase-fixture.json').readAsStringSync())
-            as Map<String, dynamic>;
+    final fixture = jsonDecode(
+      File('$root/tool-firebase-fixture.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
     for (final entry in fixture.entries) {
       write(entry.key, entry.value as String);
     }

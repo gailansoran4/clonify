@@ -24,22 +24,37 @@ Future<void> applyBackgroundGeolocationLicenses(
   final iosLicense = (configJson[backgroundGeolocationLicenseIosKey] as String?)
       ?.trim();
 
-  if ((androidLicense == null || androidLicense.isEmpty) &&
-      (iosLicense == null || iosLicense.isEmpty)) {
-    if (configJson.containsKey(backgroundGeolocationLicenseAndroidKey) ||
-        configJson.containsKey(backgroundGeolocationLicenseIosKey)) {
+  for (final entry in {
+    backgroundGeolocationLicenseAndroidKey: androidLicense,
+    backgroundGeolocationLicenseIosKey: iosLicense,
+  }.entries) {
+    if (configJson[entry.key] != null && (entry.value?.isEmpty ?? true)) {
       throw CustomException(
-        'backgroundGeolocationLicenseAndroid and backgroundGeolocationLicenseIos must be set',
+        '${entry.key} must be a non-empty JWT when provided.',
       );
     }
-    return;
   }
-
   if (androidLicense != null && androidLicense.isNotEmpty) {
     await applyAndroidBackgroundGeolocationLicense(androidLicense);
+  } else {
+    removeNativeLicense(
+      Constants.androidMainManifestFilePath,
+      RegExp(
+        r'<meta-data\b[^>]*android:name="com\.transistorsoft\.locationmanager\.license"[^>]*/>',
+        multiLine: true,
+      ),
+    );
   }
   if (iosLicense != null && iosLicense.isNotEmpty) {
     await applyIosBackgroundGeolocationLicense(iosLicense);
+  } else {
+    removeNativeLicense(
+      Constants.iosInfoPlistFilePath,
+      RegExp(
+        r'<key>TSLocationManagerLicense</key>\s*<string>[^<]*</string>',
+        multiLine: true,
+      ),
+    );
   }
 }
 
@@ -105,4 +120,12 @@ Future<void> applyIosBackgroundGeolocationLicense(String license) async {
 
   await file.writeAsString(content);
   logger.i('✅ Background Geolocation iOS license applied');
+}
+
+void removeNativeLicense(String path, RegExp pattern) {
+  final file = File(path);
+  if (!file.existsSync()) return;
+  final content = file.readAsStringSync();
+  final updated = content.replaceAll(pattern, '');
+  if (content != updated) file.writeAsStringSync(updated);
 }

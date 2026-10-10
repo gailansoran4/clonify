@@ -2,8 +2,10 @@
 library;
 
 import 'dart:io';
+
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+
 import '../test_utils.dart';
 
 void main() {
@@ -60,13 +62,11 @@ firebase:
   enabled: false
 ''';
 
-      File(
-        '${clonifyDir.path}/clonify_settings.yaml',
-      ).writeAsStringSync(invalidSettings);
+      File('${clonifyDir.path}/clonify_settings.yaml')
+          .writeAsStringSync(invalidSettings);
 
-      final content = File(
-        '${clonifyDir.path}/clonify_settings.yaml',
-      ).readAsStringSync();
+      final content = File('${clonifyDir.path}/clonify_settings.yaml')
+          .readAsStringSync();
 
       // Missing fields
       expect(content.contains('company_name:'), isFalse);
@@ -176,13 +176,11 @@ firebase:
         'company_name: ""',
       );
 
-      File(
-        '${clonifyDir.path}/clonify_settings.yaml',
-      ).writeAsStringSync(invalidSettings);
+      File('${clonifyDir.path}/clonify_settings.yaml')
+          .writeAsStringSync(invalidSettings);
 
-      final content = File(
-        '${clonifyDir.path}/clonify_settings.yaml',
-      ).readAsStringSync();
+      final content = File('${clonifyDir.path}/clonify_settings.yaml')
+          .readAsStringSync();
 
       expect(content.contains('company_name: ""'), isTrue);
     });
@@ -360,13 +358,11 @@ firebase:
             '# splash_screen_asset: null',
           );
 
-      File(
-        '${clonifyDir.path}/clonify_settings.yaml',
-      ).writeAsStringSync(settingsWithoutSplash);
+      File('${clonifyDir.path}/clonify_settings.yaml')
+          .writeAsStringSync(settingsWithoutSplash);
 
-      final content = File(
-        '${clonifyDir.path}/clonify_settings.yaml',
-      ).readAsStringSync();
+      final content = File('${clonifyDir.path}/clonify_settings.yaml')
+          .readAsStringSync();
 
       expect(content.contains('# splash_screen_asset: null'), isTrue);
     });
@@ -379,9 +375,8 @@ firebase:
       final clonifyDir = Directory('${testDir.path}/clonify');
       clonifyDir.createSync(recursive: true);
 
-      File(
-        '${clonifyDir.path}/last_config.json',
-      ).writeAsStringSync(TestFixtures.sampleCloneConfig().toString());
+      File('${clonifyDir.path}/last_config.json')
+          .writeAsStringSync(TestFixtures.sampleCloneConfig().toString());
 
       TestAssertions.assertFileExists(
         '${testDir.path}/clonify/last_config.json',

@@ -59,9 +59,8 @@ String? resolveFirebaseServiceAccount({
   Object? credential;
   try {
     resolvedPath = credentialFile.resolveSymbolicLinksSync();
-    projectPath = Directory(
-      projectDirectory ?? Directory.current.path,
-    ).resolveSymbolicLinksSync();
+    projectPath = Directory(projectDirectory ?? Directory.current.path)
+        .resolveSymbolicLinksSync();
     credential = jsonDecode(File(resolvedPath).readAsStringSync());
   } on FileSystemException {
     throw const FormatException(

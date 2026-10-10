@@ -47,10 +47,21 @@ void main() {
     },
   );
 
+  test('captured tool prompts receive EOF instead of hanging', () async {
+    final script = File('prompt.dart')
+      ..writeAsStringSync(
+        'import "dart:io"; void main() { print(stdin.readLineSync() == null ? "EOF" : "input"); }',
+      );
+    final result = await executeCommand(Platform.resolvedExecutable, [
+      script.absolute.path,
+    ], timeout: const Duration(seconds: 5));
+    expect(result.exitCode, 0);
+    expect((result.stdout as String).trim(), 'EOF');
+  });
+
   test('runCommand propagates a failed exit to its transaction', () async {
-    File(
-      'fail.dart',
-    ).writeAsStringSync('import "dart:io"; void main() { exitCode = 9; }');
+    File('fail.dart')
+        .writeAsStringSync('import "dart:io"; void main() { exitCode = 9; }');
     File('pubspec.yaml').writeAsStringSync('old');
     await expectLater(
       runConfigureTransaction(() async {

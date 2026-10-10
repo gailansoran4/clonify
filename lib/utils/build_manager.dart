@@ -35,7 +35,7 @@ Future<void> buildApps(BuildCommandModel model) => withProjectLock(() async {
   if (!model.skipAll &&
       !model.skipBuildCheck &&
       prompt(
-            'Build ${config['appName']} (${config['packageName']}) ${config['version']}? (y/n):',
+            'Build ${config['appName']} (${config['androidPackageName']} / ${config['iosPackageName']}) ${config['version']}? (y/n):',
           ).toLowerCase() !=
           'y') {
     throw const CommandCancelled();
@@ -69,9 +69,9 @@ Future<void> buildApps(BuildCommandModel model) => withProjectLock(() async {
           _ => findFreshIpa(started),
         };
         requireFile(artifact);
-        if (File(artifact).lastModifiedSync().isBefore(
-          started.subtract(const Duration(seconds: 2)),
-        )) {
+        if (File(artifact)
+            .lastModifiedSync()
+            .isBefore(started.subtract(const Duration(seconds: 2)))) {
           throw CustomException(
             '$target returned success but did not produce a fresh artifact at $artifact. Rebuild before uploading.',
           );

@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import 'profile_schema.dart';
+
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -62,16 +65,31 @@ Map<String, dynamic> readCloneProfile(String clientId) {
   if (value is! Map<String, dynamic>) {
     throw CustomException('$path must contain a JSON object.');
   }
-  validateProfileFields(clientId, value);
-  return value;
+  final config = normalizeProfile(value);
+  validateProfileFields(clientId, config);
+  return config;
 }
 
 void validateProfileFields(String clientId, Map<String, dynamic> config) {
   assertClientId(clientId);
-  for (final field in ['appName', 'packageName']) {
+  for (final field in [
+    'clientId',
+    'appName',
+    'androidPackageName',
+    'iosPackageName',
+    'version',
+    'logo',
+    'launcherIcon',
+    'splashScreen',
+  ]) {
+    if (config[field] != null && config[field] is! String) {
+      throw CustomException(
+        'Profile "$clientId": "${snakeCaseField(field)}" must be a string.',
+      );
+    }
     if (trimmedConfigString(config[field]) == null) {
       throw CustomException(
-        'Profile "$clientId": "$field" must be a non-empty string.',
+        'Profile "$clientId": "${snakeCaseField(field)}" must be a non-empty string.',
       );
     }
   }
@@ -104,20 +122,20 @@ void validateProfileFields(String clientId, Map<String, dynamic> config) {
       'Profile "$clientId": clientId in config.json must match its folder.',
     );
   }
-  // Older profiles may omit clientId/version; preserve their documented defaults.
-  config['clientId'] = clientId;
-  config['version'] ??= '1.0.0+1';
   if (!RegExp(r'^\d+\.\d+\.\d+\+\d+$').hasMatch(config['version'] as String)) {
     throw CustomException(
       'Profile "$clientId": version must use major.minor.patch+build (for example 1.0.0+1).',
     );
   }
-  if (!RegExp(
-    r'^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$',
-  ).hasMatch(config['packageName'] as String)) {
-    throw CustomException(
-      'Profile "$clientId": packageName must be a valid application identifier, for example com.example.app.',
-    );
+  for (final field in ['androidPackageName', 'iosPackageName']) {
+    final pattern = field == 'androidPackageName'
+        ? r'^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$'
+        : r'^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$';
+    if (!RegExp(pattern).hasMatch(config[field] as String)) {
+      throw CustomException(
+        'Profile "$clientId": ${snakeCaseField(field)} must be a valid application identifier, for example com.example.app.',
+      );
+    }
   }
   if (RegExp(r'[\x00-\x1f]').hasMatch(config['appName'] as String)) {
     throw CustomException(
@@ -163,9 +181,8 @@ void validateProfileFields(String clientId, Map<String, dynamic> config) {
     for (final color in colors) {
       if (color is! Map ||
           color['name'] is! String ||
-          !RegExp(
-            r'^[a-zA-Z][a-zA-Z0-9_]*$',
-          ).hasMatch(color['name'] as String) ||
+          !RegExp(r'^[a-zA-Z][a-zA-Z0-9_]*$')
+              .hasMatch(color['name'] as String) ||
           color['color'] is! String ||
           !RegExp(r'^[a-fA-F0-9]{6}$').hasMatch(color['color'] as String) ||
           names.contains(color['name'])) {
@@ -173,7 +190,7 @@ void validateProfileFields(String clientId, Map<String, dynamic> config) {
           'Profile "$clientId": colors require unique Dart names and six-digit hex values.',
         );
       }
-      assertGeneratedFieldName(color['name'] as String, names);
+      assertGeneratedFieldName(camelCaseField(color['name'] as String), names);
     }
   }
 }
@@ -234,16 +251,17 @@ ConfigurePlan inspectConfigure(ConfigureCommandModel model) {
   check(() {
     final names = generatedReservedFields();
     for (final item in config['colors'] as List? ?? []) {
-      names.add((item as Map)['name'] as String);
+      names.add(camelCaseField((item as Map)['name'] as String));
     }
     for (final field in settings.customFields) {
-      assertGeneratedFieldName(field.name, names);
-      if (field.name == 'firebaseServiceAccount') {
+      final name = camelCaseField(field.name);
+      assertGeneratedFieldName(name, names);
+      if (name == 'firebaseServiceAccount') {
         throw CustomException(
           'firebaseServiceAccount cannot be an app custom field.',
         );
       }
-      final value = config[field.name];
+      final value = config[name];
       if (value == null) continue;
       final valid = switch (field.type) {
         'string' => value is String,
@@ -301,7 +319,9 @@ ConfigurePlan inspectConfigure(ConfigureCommandModel model) {
     check(() => assertToolAvailable('dart'));
   }
   var firebaseMode = FirebaseSetupMode.disabled;
-  if (settings.firebaseEnabled && !model.isDebug) {
+  if (settings.firebaseEnabled &&
+      !model.isDebug &&
+      trimmedConfigString(config['firebaseProjectId']) != null) {
     check(
       () => firebaseMode = inspectFirebase(
         config,
@@ -318,12 +338,8 @@ ConfigurePlan inspectConfigure(ConfigureCommandModel model) {
   }
   if (settings.shorebirdEnabled &&
       !model.isDebug &&
-      !model.skipShorebirdConfigure) {
-    if (trimmedConfigString(config['shorebirdAppId']) == null) {
-      errors.add(
-        'Profile "$clientId" needs shorebirdAppId because Shorebird is enabled.',
-      );
-    }
+      !model.skipShorebirdConfigure &&
+      trimmedConfigString(config['shorebirdAppId']) != null) {
     check(() => requireFile('shorebird.yaml'));
   }
   final roots = <String>{
@@ -378,7 +394,8 @@ ConfigurePlan inspectConfigure(ConfigureCommandModel model) {
         'Firebase: ${firebaseMode.name}',
       if (settings.shorebirdEnabled &&
           !model.isDebug &&
-          !model.skipShorebirdConfigure)
+          !model.skipShorebirdConfigure &&
+          trimmedConfigString(config['shorebirdAppId']) != null)
         'Sync Shorebird app ID',
       'Apply version choices and run installed generators',
       'Generate clone configuration and native signing',
@@ -401,7 +418,8 @@ FirebaseSetupMode inspectFirebase(
       'Profile "$clientId" needs firebaseProjectId because Firebase is enabled.',
     );
   }
-  final package = config['packageName'] as String;
+  final package = androidPackageName(config);
+  final iosPackage = iosPackageName(config);
   assertProjectPath(settings.firebaseSettingsFilePath);
   final metadataType = FileSystemEntity.typeSync(
     settings.firebaseSettingsFilePath,
@@ -427,13 +445,19 @@ FirebaseSetupMode inspectFirebase(
           'Firebase cache may contain only Flutter metadata. Run configure --refreshFirebase after correcting the cache.',
         );
       }
-      assertFirebaseConfiguration(project, package, directory: cache.path);
+      assertFirebaseConfiguration(
+        project,
+        package,
+        iosPackageName: iosPackage,
+        directory: cache.path,
+      );
       return FirebaseSetupMode.cached;
     }
     try {
       assertFirebaseConfiguration(
         project,
         package,
+        iosPackageName: iosPackage,
         firebaseSettingsFilePath: settings.firebaseSettingsFilePath,
       );
       return FirebaseSetupMode.active;
@@ -467,6 +491,8 @@ void requireFile(String path) {
 Set<String> generatedReservedFields() => {
   'baseUrl',
   'packageName',
+  'androidPackageName',
+  'iosPackageName',
   'appName',
   'logo',
   'launcherIcon',

@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import 'profile_schema.dart';
+
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -31,8 +34,7 @@ bool projectHasBackgroundGeolocationSlots() {
 
 bool licensesAreRequired(Map<String, dynamic> configJson) {
   return configJson.containsKey(backgroundGeolocationLicenseAndroidKey) ||
-      configJson.containsKey(backgroundGeolocationLicenseIosKey) ||
-      projectHasBackgroundGeolocationSlots();
+      configJson.containsKey(backgroundGeolocationLicenseIosKey);
 }
 
 bool notificationIconIsRequired(Map<String, dynamic> configJson) {
@@ -90,36 +92,28 @@ void assertCloneAssetFiles(
 void assertBackgroundGeolocationLicenses(Map<String, dynamic> configJson) {
   if (!licensesAreRequired(configJson)) return;
 
-  final packageName = trimmedConfigString(configJson['packageName']);
-  final androidLicense = trimmedConfigString(
-    configJson[backgroundGeolocationLicenseAndroidKey],
-  );
-  final iosLicense = trimmedConfigString(
-    configJson[backgroundGeolocationLicenseIosKey],
-  );
-
-  if (packageName == null) {
-    throw CustomException('packageName is not set');
+  for (final platform in ['android', 'ios']) {
+    final field = platform == 'android'
+        ? backgroundGeolocationLicenseAndroidKey
+        : backgroundGeolocationLicenseIosKey;
+    if (configJson[field] == null) continue;
+    final license = trimmedConfigString(configJson[field]);
+    if (license == null) {
+      throw CustomException('$field must be a non-empty JWT when provided.');
+    }
+    final package = platform == 'android'
+        ? androidPackageName(configJson)
+        : iosPackageName(configJson);
+    if (package.isEmpty) {
+      throw CustomException('${platform}_package_name is not set');
+    }
+    assertLicenseJwt(
+      license: license,
+      field: field,
+      expectedOs: platform,
+      expectedPackageName: package,
+    );
   }
-  if (androidLicense == null) {
-    throw CustomException('backgroundGeolocationLicenseAndroid is not set');
-  }
-  if (iosLicense == null) {
-    throw CustomException('backgroundGeolocationLicenseIos is not set');
-  }
-
-  assertLicenseJwt(
-    license: androidLicense,
-    field: backgroundGeolocationLicenseAndroidKey,
-    expectedOs: 'android',
-    expectedPackageName: packageName,
-  );
-  assertLicenseJwt(
-    license: iosLicense,
-    field: backgroundGeolocationLicenseIosKey,
-    expectedOs: 'ios',
-    expectedPackageName: packageName,
-  );
 }
 
 void assertLicenseJwt({
@@ -205,40 +199,17 @@ void assertGeneratedCloneConfigsFile() {
 void assertNativeLicensesApplied(Map<String, dynamic> configJson) {
   if (!licensesAreRequired(configJson)) return;
 
-  final androidLicense = trimmedConfigString(
-    configJson[backgroundGeolocationLicenseAndroidKey],
-  );
-  final iosLicense = trimmedConfigString(
-    configJson[backgroundGeolocationLicenseIosKey],
-  );
-
-  final manifest = File(Constants.androidMainManifestFilePath);
-  if (!manifest.existsSync()) {
-    throw CustomException(
-      'AndroidManifest.xml not found; cannot apply backgroundGeolocationLicenseAndroid',
-    );
-  }
-  if (androidLicense != null &&
-      !manifest.readAsStringSync().contains(androidLicense)) {
-    throw CustomException(
-      'AndroidManifest.xml does not contain backgroundGeolocationLicenseAndroid',
-    );
-  }
-
-  final plist = File(Constants.iosInfoPlistFilePath);
-  if (!plist.existsSync()) {
-    throw CustomException(
-      'Info.plist not found; cannot apply backgroundGeolocationLicenseIos',
-    );
-  }
-  final plistText = plist.readAsStringSync();
-  if (!plistText.contains(iosLicensePlistKey)) {
-    throw CustomException('Info.plist is missing $iosLicensePlistKey');
-  }
-  if (iosLicense != null && !plistText.contains(iosLicense)) {
-    throw CustomException(
-      'Info.plist $iosLicensePlistKey does not match backgroundGeolocationLicenseIos',
-    );
+  for (final entry in {
+    backgroundGeolocationLicenseAndroidKey:
+        Constants.androidMainManifestFilePath,
+    backgroundGeolocationLicenseIosKey: Constants.iosInfoPlistFilePath,
+  }.entries) {
+    final license = trimmedConfigString(configJson[entry.key]);
+    if (license == null) continue;
+    final file = File(entry.value);
+    if (!file.existsSync() || !file.readAsStringSync().contains(license)) {
+      throw CustomException('${entry.value} does not contain ${entry.key}');
+    }
   }
 }
 

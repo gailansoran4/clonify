@@ -1,3 +1,13 @@
+## 0.6.0
+
+- Generate `abstract class CloneConfigs() {}` and escaped single-quoted strings (Dart 3.13+).
+- Support independent `android_package_name` / `ios_package_name` throughout native renaming, Firebase setup/cache, license checks, builds, uploads, and Shorebird.
+- Persist snake_case profile JSON and generate camelCase Dart fields; read legacy profiles and migrate on successful configure.
+- Require only client ID, both platform IDs, app name, version, logo, launcher icon, and splash screen. Other fields are optional and validated when supplied.
+- Remove all reads/writes of `last_client.txt`; resolve explicit IDs, the active configuration receipt, or a single profile.
+- Document `--client-id`, add separate creation prompts, platform diagnostics, and non-interactive version syncing.
+- Add schema, generated-code compilation, profile selection, migration, Firebase, and full CLI regression tests.
+
 ## 0.5.0 - 2026-10-05
 
 - Add `doctor`, `configure --dry-run`, `recover`, and `firebase refresh` commands.

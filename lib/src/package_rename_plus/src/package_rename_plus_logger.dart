@@ -1,3 +1,5 @@
+import 'package:clonify/utils/tui_helpers.dart';
+
 class PackageRenamePlusLogger {
   // (🟥 Red)
   static const _red = '\x1B[31m';
@@ -28,6 +30,7 @@ class PackageRenamePlusLogger {
     required String message,
     String colorCode = _orange,
   }) {
+    if (!isTUIEnabled()) return message;
     return message
         .split('\n')
         .map((line) => '$colorCode$line\x1B[0m') // Apply color per line

@@ -1,6 +1,7 @@
 // Clone Config Section
-import 'dart:convert';
 import 'dart:io';
+
+import 'profile_schema.dart';
 import 'configuration_preflight.dart';
 import 'command_process.dart';
 import 'clone_config_generator.dart';
@@ -14,12 +15,11 @@ import 'package:clonify/constants.dart';
 import 'package:clonify/custom_exceptions.dart';
 import 'package:clonify/models/config_model.dart';
 import 'package:clonify/models/commands_calls_models/configure_command_model.dart';
-import 'package:clonify/src/clonify_core.dart';
 import 'package:clonify/utils/android_signing_manager.dart';
 import 'package:clonify/utils/asset_manager.dart';
 import 'package:clonify/utils/background_geolocation_license_manager.dart';
 import 'package:clonify/utils/clone_configure_validator.dart';
-import 'package:clonify/utils/clonify_helpers.dart' hide saveLastClientId;
+import 'package:clonify/utils/clonify_helpers.dart';
 import 'package:clonify/utils/notification_icon_manager.dart';
 import 'package:clonify/utils/firebase_manager.dart';
 import 'package:clonify/utils/file_tree_checkpoint.dart';
@@ -81,10 +81,10 @@ Map<String, String>? _promptCloneBasicInfo() {
     );
 
     final baseUrl = promptUserTUI(
-      '🌐 Enter the base URL (e.g., https://example.com OR "no" for no base URL)',
+      '🌐 Base URL (optional; Enter to skip)',
       '',
       validator: (value) {
-        if (value.trim() == 'no') {
+        if (value.trim().isEmpty || value.trim() == 'no') {
           infoMessage('No base URL will be used');
           return true;
         }
@@ -97,29 +97,31 @@ Map<String, String>? _promptCloneBasicInfo() {
     );
 
     final primaryColor = promptUserTUI(
-      '🎨 Enter the primary color (hex format: 0xAARRGGBB)',
-      currentClonifySettings().defaultColor,
+      '🎨 Primary color (optional; #RRGGBB or 0xAARRGGBB)',
+      '',
       validator: (value) {
-        // if (!RegExp(r'^0x[0-9a-fA-F]{8}$').hasMatch(value)) {
-        //   errorMessage(
-        //     'Invalid color format. Use 0xAARRGGBB (e.g., 0xAAFFFFFF)',
-        //   );
-        //   return false;
-        // }
-        return true;
+        return value.isEmpty || notificationColorHexFromPrimary(value) != null;
       },
     );
 
     final packageName = promptUserTUI(
-      '📦 Enter the package name (e.g., com.example.app)',
+      '📦 Android package name (e.g., com.example.app)',
       'com.${currentClonifySettings().companyName}.${clientId.toLowerCase().replaceAll(' ', '').replaceAll('-', '').replaceAll('_', '')}',
       validator: (value) {
-        if (!RegExp(r'^[a-zA-Z]+\.[a-zA-Z]+\.[a-zA-Z]+$').hasMatch(value)) {
+        if (!RegExp(r'^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$')
+            .hasMatch(value)) {
           errorMessage('Invalid package name format. Use com.company.app');
           return false;
         }
         return true;
       },
+    );
+
+    final iosPackage = promptUserTUI(
+      '🍎 iOS bundle ID (Enter to use the Android package name)',
+      packageName,
+      validator: (value) =>
+          RegExp(r'^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$').hasMatch(value),
     );
 
     final appName = promptUserTUI(
@@ -149,15 +151,15 @@ Map<String, String>? _promptCloneBasicInfo() {
     String firebaseProjectId = '';
     if (currentClonifySettings().firebaseEnabled) {
       firebaseProjectId = promptUserTUI(
-        '🔥 Enter the Firebase project ID (e.g., my-project-id)',
-        'firebase-$clientId-flutter',
+        '🔥 Firebase project ID (optional; Enter to skip)',
+        '',
       );
     }
 
     String shorebirdAppId = '';
     if (currentClonifySettings().shorebirdEnabled) {
       shorebirdAppId = promptUserTUI(
-        '🐦 Enter the Shorebird app ID (from shorebird.yaml / console)',
+        '🐦 Shorebird app ID (optional; Enter to skip)',
         '',
       );
     }
@@ -165,19 +167,20 @@ Map<String, String>? _promptCloneBasicInfo() {
     // Prompt for custom fields if any are defined
     final configMap = <String, String>{
       'clientId': clientId,
-      'baseUrl': baseUrl,
-      'primaryColor': primaryColor,
-      'packageName': packageName,
+      if (baseUrl.isNotEmpty && baseUrl != 'no') 'baseUrl': baseUrl,
+      if (primaryColor.isNotEmpty) 'primaryColor': primaryColor,
+      'androidPackageName': packageName,
+      'iosPackageName': iosPackage,
       'appName': appName,
       'version': version,
-      'firebaseProjectId': firebaseProjectId,
-      'shorebirdAppId': shorebirdAppId,
+      if (firebaseProjectId.isNotEmpty) 'firebaseProjectId': firebaseProjectId,
+      if (shorebirdAppId.isNotEmpty) 'shorebirdAppId': shorebirdAppId,
     };
 
-    if (currentClonifySettings().needsLauncherIcon) {
+    {
       final launcherIcon = promptUserTUI(
         '🎯 Enter the launcher icon filename (e.g., icon.png)',
-        '',
+        'icon.png',
         validator: (value) {
           if (value.trim().isEmpty) {
             errorMessage('Launcher icon filename cannot be empty');
@@ -193,10 +196,10 @@ Map<String, String>? _promptCloneBasicInfo() {
       configMap['launcherIcon'] = launcherIcon;
     }
 
-    if (currentClonifySettings().needsSplashScreen) {
+    {
       final splashScreen = promptUserTUI(
         '🎯 Enter the splash screen filename (e.g., splash.png)',
-        '',
+        'splash.png',
         validator: (value) {
           if (value.trim().isEmpty) {
             errorMessage('Splash screen filename cannot be empty');
@@ -217,7 +220,7 @@ Map<String, String>? _promptCloneBasicInfo() {
       configMap['backgroundSplashColor'] = backgroundSplashColor;
     }
 
-    if (currentClonifySettings().needsLogo) {
+    {
       final logo = promptUserTUI(
         '🎯 Enter the logo filename (e.g., logo.png)',
         'logo.png',
@@ -238,12 +241,11 @@ Map<String, String>? _promptCloneBasicInfo() {
       infoMessage('\n⚙️  Custom Configuration Fields:');
       for (final field in currentClonifySettings().customFields) {
         final value = promptUserTUI(
-          '🔧 Enter value for "${field.name}" (type: ${field.type})',
+          '🔧 ${snakeCaseField(field.name)} (${field.type}, optional; Enter to skip)',
           '',
           validator: (value) {
             if (value.trim().isEmpty) {
-              errorMessage('Value cannot be empty');
-              return false;
+              return true;
             }
             switch (field.type) {
               case 'int':
@@ -271,6 +273,7 @@ Map<String, String>? _promptCloneBasicInfo() {
             }
           },
         );
+        if (value.trim().isEmpty) continue;
         configMap['custom_${field.name}'] = value;
         successMessage('Set ${field.name} = $value');
       }
@@ -281,7 +284,8 @@ Map<String, String>? _promptCloneBasicInfo() {
     infoMessage('  🆔 Client ID: ${configMap['clientId']}');
     infoMessage('  🌐 Base URL: ${configMap['baseUrl']}');
     infoMessage('  🎨 Primary Color: ${configMap['primaryColor']}');
-    infoMessage('  📦 Package: ${configMap['packageName']}');
+    infoMessage('  📦 Android: ${configMap['androidPackageName']}');
+    infoMessage('  🍎 iOS: ${configMap['iosPackageName']}');
     infoMessage('  📱 App Name: ${configMap['appName']}');
     infoMessage('  🔢 Version: ${configMap['version']}');
     if (firebaseProjectId.isNotEmpty) {
@@ -318,7 +322,8 @@ bool _createCloneStructure(Map<String, String> config) {
     // Build config JSON dynamically to include custom fields
     final configJson = <String, dynamic>{
       'clientId': config['clientId'],
-      'packageName': config['packageName'],
+      'androidPackageName': config['androidPackageName'],
+      'iosPackageName': config['iosPackageName'],
       'appName': config['appName'],
       'baseUrl': config['baseUrl'],
       'primaryColor': config['primaryColor'],
@@ -330,6 +335,8 @@ bool _createCloneStructure(Map<String, String> config) {
       'backgroundSplashColor': config['backgroundSplashColor'] ?? '0xFFFFFFFF',
       'logo': config['logo'],
     };
+
+    configJson.removeWhere((key, value) => value == null);
 
     // Add custom fields to config
     for (final key in config.keys) {
@@ -350,9 +357,7 @@ bool _createCloneStructure(Map<String, String> config) {
 
     validateProfileFields(clientId, configJson);
     final configFile = File('${cloneDir.path}/config.json');
-    configFile.writeAsStringSync(
-      const JsonEncoder.withIndent('  ').convert(configJson),
-    );
+    configFile.writeAsStringSync(encodeProfile(configJson));
     _createdClonePaths.add(configFile.path);
 
     logger.i('✅ Config file created at: ${configFile.path}');
@@ -372,13 +377,14 @@ bool _createCloneStructure(Map<String, String> config) {
 Future<bool> _setupCloneServices(Map<String, String> config) async {
   try {
     final doRename = prompt(
-      'Do you want to rename the app with ${config['appName']} and package with ${config['packageName']}? (y/n):',
+      'Do you want to rename the app with ${config['appName']} and package with ${config['androidPackageName']} (Android), ${config['iosPackageName']} (iOS)? (y/n):',
     );
 
     if (doRename.toLowerCase() == 'y') {
       await runRenamePackage(
         appName: config['appName']!,
-        packageName: config['packageName']!,
+        packageName: config['androidPackageName']!,
+        iosPackageName: config['iosPackageName']!,
       );
     } else {
       logger.i('🚀 Skipping renaming process...');
@@ -387,8 +393,9 @@ Future<bool> _setupCloneServices(Map<String, String> config) async {
     if (currentClonifySettings().firebaseEnabled) {
       await createFirebaseProject(
         clientId: config['clientId']!,
-        packageName: config['packageName']!,
-        firebaseProjectId: config['firebaseProjectId']!,
+        packageName: config['androidPackageName']!,
+        iosPackageName: config['iosPackageName']!,
+        firebaseProjectId: config['firebaseProjectId'] ?? '',
       );
     }
 
@@ -477,11 +484,12 @@ Future<bool> _performInitialSetup(
 
     // Step 2: Rename app name and package
     final renameProgress = progressWithTUI(
-      '📦 Renaming package to ${configJson['packageName']}...',
+      '📦 Renaming package to ${androidPackageName(configJson)} (Android), ${iosPackageName(configJson)} (iOS)...',
     );
     await runRenamePackage(
       appName: configJson['appName'],
-      packageName: configJson['packageName'],
+      packageName: androidPackageName(configJson),
+      iosPackageName: iosPackageName(configJson),
     );
     renameProgress?.complete('Package renamed successfully');
 
@@ -533,7 +541,8 @@ Future<void> configureProfileServices(
       );
       await addFirebaseToApp(
         clientId: callModel.clientId!,
-        packageName: configJson['packageName'],
+        packageName: androidPackageName(configJson),
+        iosPackageName: iosPackageName(configJson),
         firebaseProjectId: firebaseProjectId,
         firebaseServiceAccount: configJson['firebaseServiceAccount'] as String?,
         skip: callModel.skipFirebaseConfigure,
@@ -581,16 +590,18 @@ Future<String?> _handleVersionManagement(
       skip: callModel.skipAll || callModel.skipVersionUpdate,
     );
     configJson['version'] = configVersion;
-    await File(
-      './clonify/clones/${callModel.clientId}/config.json',
-    ).writeAsString(jsonEncode(configJson));
+    await File('./clonify/clones/${callModel.clientId}/config.json')
+        .writeAsString(encodeProfile(configJson));
   }
 
   // Sync pubspec version with config
   if (yamlVersion != configVersion && !callModel.skipPubUpdate) {
     final updateYamlVersionAnswer = prompt(
       'Version in pubspec.yaml ($yamlVersion) is different from config file ($configVersion). Do you want to update pubspec.yaml with the config version? (y/n):',
-      skip: callModel.skipAll,
+      skip:
+          callModel.skipAll ||
+          callModel.skipVersionUpdate ||
+          !stdin.hasTerminal,
       skipValue: 'y',
     );
 
@@ -619,9 +630,8 @@ Future<String?> _handleVersionManagement(
     );
     if (!callModel.skipPubUpdate) await updateYamlVersionInPubspec(newVersion);
     configJson['version'] = newVersion;
-    await File(
-      './clonify/clones/${callModel.clientId}/config.json',
-    ).writeAsString(jsonEncode(configJson));
+    await File('./clonify/clones/${callModel.clientId}/config.json')
+        .writeAsString(encodeProfile(configJson));
     return newVersion;
   }
 
@@ -694,10 +704,15 @@ Future<Map<String, dynamic>?> configureApp(
         checkVersion: !callModel.skipPubUpdate,
       );
       checkCommandCancellation();
+      File(Constants.configFilePath(callModel.clientId!))
+          .writeAsStringSync(encodeProfile(configJson));
       recordConfiguredProfile(callModel.clientId!, configJson);
-      await saveLastClientId(callModel.clientId!);
       if (afterConfigure != null) await afterConfigure();
       logger.i('✅ Configure finished for ${callModel.clientId}');
+      logger.i('Android: ${androidPackageName(configJson)}');
+      logger.i('iOS: ${iosPackageName(configJson)}');
+      logger.i('Version: ${configJson['version']}');
+      logger.i('Generated: lib/generated/clone_configs.dart');
       return configJson;
     }, roots: plan.roots);
   } on ConfigureRolledBackException catch (error) {
@@ -782,12 +797,15 @@ Future<void> getCurrentCloneConfig() async {
         config['package_rename_config']?['android']?['app_name'] ?? '';
     final androidPackageName =
         config['package_rename_config']?['android']?['package_name'] ?? '';
+    final iosPackageName =
+        config['package_rename_config']?['ios']?['package_name'] ?? '';
     final iosBundleName =
         config['package_rename_config']?['ios']?['bundle_name'] ?? '';
 
     logger.i('App Name: $androidAppName');
     logger.i('Android Package Name: $androidPackageName');
     logger.i('iOS Bundle Name: $iosBundleName');
+    logger.i('iOS Bundle ID: $iosPackageName');
     logger.i('Client ID: $lastClientId');
   } catch (e) {
     logger.e('❌ Error getting current clone config: $e');
@@ -834,7 +852,9 @@ Future<void> listClients() async {
       final configFile = File('${entity.path}/config.json');
       if (configFile.existsSync()) {
         try {
-          final content = jsonDecode(configFile.readAsStringSync());
+          final content = readCloneProfile(
+            entity.uri.pathSegments.where((part) => part.isNotEmpty).last,
+          );
           final clientId = content['clientId'] ?? '';
           final appName = content['appName'] ?? '';
           final firebaseProjectId = content['firebaseProjectId'] ?? '';

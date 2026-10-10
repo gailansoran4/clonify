@@ -103,6 +103,9 @@ Future<ProcessResult> executeCommand(
     );
   }
   session?.children.add(process);
+  // Captured commands cannot be answered interactively. EOF makes an unexpected
+  // tool prompt fail promptly instead of blocking until the command timeout.
+  if (!inheritStdio) await process.stdin.close();
   final output = inheritStdio
       ? Future.value('')
       : process.stdout

@@ -137,62 +137,57 @@ fastlane:
     },
   );
 
-  test(
-    'refresh preserves the existing currentPlatform function in its cache',
-    () async {
-      final existing = firebaseManagerFixture();
-      existing['lib/firebase_options.dart'] =
-          existing['lib/firebase_options.dart']!.replaceFirst(
-            'class DefaultFirebaseOptions {',
-            'class DefaultFirebaseOptions {\n'
-                '  static FirebaseOptions currentPlatform() { return android; }',
-          );
-      writeFirebaseManagerFixture(existing);
+  test('refresh preserves the existing currentPlatform function in its cache', () async {
+    final existing = firebaseManagerFixture();
+    existing['lib/firebase_options.dart'] =
+        existing['lib/firebase_options.dart']!.replaceFirst(
+          'class DefaultFirebaseOptions {',
+          'class DefaultFirebaseOptions {\n'
+              '  static FirebaseOptions currentPlatform() { return android; }',
+        );
+    writeFirebaseManagerFixture(existing);
 
-      await addFirebaseToApp(
-        clientId: 'client_a',
-        firebaseProjectId: 'project-a',
-        packageName: 'com.test.clienta',
-        firebaseServiceAccount: credentialFile.path,
-        refresh: true,
-        configureCommand: (arguments, environment) async {
-          final generated = firebaseManagerFixture();
-          generated['lib/firebase_options.dart'] =
-              generated['lib/firebase_options.dart']!.replaceFirst(
-                'class DefaultFirebaseOptions {',
-                'class DefaultFirebaseOptions {\n'
-                    '  static FirebaseOptions get currentPlatform { return android; }',
-              );
-          writeFirebaseManagerFixture(generated);
-          return ProcessResult(1, 0, '', '');
-        },
-      );
+    await addFirebaseToApp(
+      clientId: 'client_a',
+      firebaseProjectId: 'project-a',
+      packageName: 'com.test.clienta',
+      firebaseServiceAccount: credentialFile.path,
+      refresh: true,
+      configureCommand: (arguments, environment) async {
+        final generated = firebaseManagerFixture();
+        generated['lib/firebase_options.dart'] =
+            generated['lib/firebase_options.dart']!.replaceFirst(
+              'class DefaultFirebaseOptions {',
+              'class DefaultFirebaseOptions {\n'
+                  '  static FirebaseOptions get currentPlatform { return android; }',
+            );
+        writeFirebaseManagerFixture(generated);
+        return ProcessResult(1, 0, '', '');
+      },
+    );
 
-      final options = File('lib/firebase_options.dart').readAsStringSync();
-      expect(options, contains('static FirebaseOptions currentPlatform()'));
-      expect(options, isNot(contains('get currentPlatform')));
-      final cache = firebaseConfigurationCacheDirectory('client_a');
-      expect(
-        File(
-          p.join(cache.path, 'lib/firebase_options.dart'),
-        ).readAsStringSync(),
-        options,
-      );
+    final options = File('lib/firebase_options.dart').readAsStringSync();
+    expect(options, contains('static FirebaseOptions currentPlatform()'));
+    expect(options, isNot(contains('get currentPlatform')));
+    final cache = firebaseConfigurationCacheDirectory('client_a');
+    expect(
+      File(p.join(cache.path, 'lib/firebase_options.dart')).readAsStringSync(),
+      options,
+    );
 
-      File('lib/firebase_options.dart').deleteSync();
-      await addFirebaseToApp(
-        clientId: 'client_a',
-        firebaseProjectId: 'project-a',
-        packageName: 'com.test.clienta',
-        firebaseServiceAccount: 'env:MISSING_CREDENTIAL_REFERENCE',
-        skip: true,
-        configureCommand: (arguments, environment) async {
-          throw StateError('restoring the function accessor must be offline');
-        },
-      );
-      expect(File('lib/firebase_options.dart').readAsStringSync(), options);
-    },
-  );
+    File('lib/firebase_options.dart').deleteSync();
+    await addFirebaseToApp(
+      clientId: 'client_a',
+      firebaseProjectId: 'project-a',
+      packageName: 'com.test.clienta',
+      firebaseServiceAccount: 'env:MISSING_CREDENTIAL_REFERENCE',
+      skip: true,
+      configureCommand: (arguments, environment) async {
+        throw StateError('restoring the function accessor must be offline');
+      },
+    );
+    expect(File('lib/firebase_options.dart').readAsStringSync(), options);
+  });
 
   test(
     'failed forced refresh preserves the cache and transaction restores files',

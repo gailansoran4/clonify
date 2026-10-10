@@ -1,7 +1,12 @@
+import 'package:path/path.dart' as p;
 // ignore_for_file: unnecessary_string_interpolations, missing_whitespace_between_adjacent_strings, avoid_print
 
 import 'dart:io';
+
+import 'profile_schema.dart';
+
 import 'dart:convert';
+
 import 'command_process.dart';
 
 import 'package:clonify/models/clonify_settings_model.dart';
@@ -459,42 +464,32 @@ String? getArgumentValue(List<String> args, String key) {
   return args[index + 1];
 }
 
-/// Saves the last used client ID to a file.
-///
-/// This function writes the provided [clientId] to the `last_client.txt` file
-/// located in the `./clonify/` directory. This allows the CLI to remember
-/// the last active client for convenience.
-///
-/// Note: This function is duplicated in `clonify_core.dart`. Consider refactoring.
-///
-/// Throws a [FileSystemException] if the file cannot be written.
-Future<void> saveLastClientId(String clientId) async {
-  final file = File('./clonify/last_client.txt');
-  await file.writeAsString(clientId);
-}
-
-/// Retrieves the last used client ID from a file.
-///
-/// This function reads the `last_client.txt` file from the `./clonify/`
-/// directory to retrieve the last active client ID.
-///
-/// [lastClientFilePath] The path to the file storing the last client ID.
-/// Defaults to `./clonify/last_client.txt`.
-///
-/// Note: This function is duplicated in `clonify_core.dart`. Consider refactoring.
-///
-/// Returns a `Future<String?>` which is the last saved client ID, or `null`
-/// if the file does not exist.
-///
-/// Throws a [FileSystemException] if the file exists but cannot be read.
-Future<String?> getLastClientId([
-  String lastClientFilePath = './clonify/last_client.txt',
-]) async {
-  final file = File(lastClientFilePath);
-  if (file.existsSync()) {
-    return file.readAsStringSync();
+/// Resolves the successfully configured profile without a last-client file.
+/// A single available profile is also unambiguous before first configure.
+Future<String?> getLastClientId() async {
+  final receiptFile = File('clonify/active_profile.json');
+  if (receiptFile.existsSync()) {
+    try {
+      final receipt = jsonDecode(receiptFile.readAsStringSync());
+      if (receipt is Map && receipt['clientId'] is String) {
+        final id = receipt['clientId'] as String;
+        if (RegExp(r'^[a-zA-Z0-9][a-zA-Z0-9_-]*$').hasMatch(id) &&
+            File('clonify/clones/$id/config.json').existsSync()) {
+          return id;
+        }
+      }
+    } on FormatException {
+      // An explicit client ID can recover an invalid receipt.
+    }
   }
-  return null;
+  final directory = Directory('clonify/clones');
+  if (!directory.existsSync()) return null;
+  final profiles = directory
+      .listSync(followLinks: false)
+      .whereType<Directory>()
+      .where((dir) => File('${dir.path}/config.json').existsSync())
+      .toList();
+  return profiles.length == 1 ? p.basename(profiles.single.path) : null;
 }
 
 /// Retrieves the last saved configuration map from a JSON file.
@@ -555,7 +550,7 @@ String versionNumberIncrementor(String version) {
 /// Returns a `Future<String>` representing the application's bundle ID.
 Future<String> getAppBundleId(String clientId) async {
   final Map<String, dynamic> configJson = await parseConfigFile(clientId);
-  return configJson['packageName'] ?? '';
+  return iosPackageName(configJson);
 }
 
 /// Retrieves the version number from a client's configuration file.
@@ -585,7 +580,7 @@ Future<String> getVersionFromConfig(String clientId) async {
       logger.e('❌ Version not found in config.json.');
       final newVersion = promptUser('Enter the version number:', '1.0.0+1');
       configJson['version'] = newVersion;
-      configFile.writeAsStringSync(jsonEncode(configJson));
+      configFile.writeAsStringSync(encodeProfile(configJson));
     }
     return configJson['version'] ?? '';
   } catch (e) {

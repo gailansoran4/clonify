@@ -25,7 +25,7 @@ A powerful command-line tool for managing multiple Flutter project clones with d
 
 ### Prerequisites
 
-- Dart SDK (^3.8.1)
+- Dart SDK (^3.13.0)
 - Flutter SDK (for building apps)
 - Firebase CLI (optional, for Firebase features)
 - Fastlane (optional, for upload features)
@@ -259,9 +259,13 @@ published remote releases or patches must be checked separately before retrying.
 
 ### Upgrade workflow
 
-Existing commands and profile JSON remain supported. Dart 3.8.1 or newer is
+Legacy commands and profile JSON remain readable; successful configure migrates the profile keys. Dart 3.13 or newer is
 supported. After upgrading, configure each profile once before building it;
 Clonify records the successful configuration in `clonify/active_profile.json`.
+`last_client.txt` is never read or written and can be deleted. Pass `--client-id`
+(or legacy `--clientId`) explicitly, reuse the active receipt, or let Clonify
+select the only available profile. Ambiguous selection gives an actionable error.
+Builds still verify the receipt, generated fields, and native IDs.
 Changing a profile's app settings requires another configure. Changing only its
 credential path does not invalidate an existing build.
 
@@ -407,70 +411,76 @@ custom_fields:
 
 ### Per-Clone Config: `./clonify/clones/{clientId}/config.json`
 
+All profile keys use `snake_case`. Generated Dart fields use `camelCase`.
+The required fields are exactly the following (the former shared package name
+is now two independent platform identifiers):
+
 ```json
 {
-  "clientId": "client_a",
-  "packageName": "com.company.clienta",
-  "appName": "Client A App",
-  "baseUrl": "https://api.client-a.com",
-  "primaryColor": "0xFF6200EE",
-  "firebaseProjectId": "firebase-client-a",
-  "firebaseServiceAccount": "~/Desktop/project-firebase.json",
-  "backgroundSplashColor": "0xFFFFFFFF",
-  "androidKeystore": "upload-keystore.jks",
-  "androidKeyProperties": "key.properties",
+  "client_id": "client_a",
+  "android_package_name": "com.company.clienta",
+  "ios_package_name": "com.company.clienta.ios",
+  "app_name": "Client A App",
   "version": "1.0.0+1",
-  "socketUrl": "wss://socket.client-a.com",
-  "maxRetries": "5",
-  "enableDebug": "false",
-  "colors": [
-    {
-      "name": "primaryBlue",
-      "color": "6200EE"
-    }
-  ],
-  "linearGradients": [
-    {
-      "name": "primaryGradient",
-      "colors": ["6200EE", "03DAC6"],
-      "begin": "topLeft",
-      "end": "bottomRight",
-      "transform": "0"
-    }
-  ]
+  "logo": "logo.png",
+  "launcher_icon": "icon.png",
+  "splash_screen": "splash.png"
 }
 ```
+
+Place those three PNG files under `clonify/clones/client_a/assets/`.
+All other fields are optional: `base_url`, `primary_color`, `firebase_project_id`,
+`firebase_service_account`, `shorebird_app_id`, `notification_icon`,
+`background_notification_color`, `background_splash_color`, `android_keystore`,
+`android_key_properties`, `background_geolocation_license_android`,
+`background_geolocation_license_ios`, `colors`, and configured custom fields.
+Supplied values are validated; an absent custom field is omitted from Dart.
+Omitted optional strings never become the literal string `'null'`.
+Firebase and Shorebird setup run only when the integration is enabled and its
+profile ID is supplied. Each supplied geolocation license must match its own
+platform's ID. Omitting a license removes the previous profile's native license.
+Signing files, when supplied, still need to be valid for release signing.
+
+Custom fields are declared in `clonify_settings.yaml`, for example
+`name: is_client_account` with `type: bool`; JSON values keep their native types
+(`true`, `5`, `1.5`, or strings). Custom and color names are converted to Dart
+camelCase and checked for duplicate/reserved names before configuration.
+
+Legacy camelCase JSON and `packageName` / `package_name` remain readable.
+A legacy shared ID supplies both platforms unless a platform explicitly supplies
+its own ID. Successful configure and version updates save canonical snake_case
+JSON with both platform IDs. Duplicate snake/camel aliases are rejected.
 
 ### Generated Config: `lib/generated/clone_configs.dart`
 
 ```dart
-abstract class CloneConfigs {
-  static const String clientId = "client_a";
-  static const String baseUrl = "https://api.client-a.com";
-  static const String version = "1.0.0+1";
-  static const String primaryColor = "0xFF6200EE";
-  static const String socketUrl = "wss://socket.client-a.com";
-  static const int maxRetries = 5;
-  static const bool enableDebug = false;
-  static const primaryBlue = Color(0xFF6200EE);
-  static const primaryGradient = LinearGradient(...);
+abstract class CloneConfigs() {
+  static const String clientId = 'client_a';
+  static const String androidPackageName = 'com.company.clienta';
+  static const String iosPackageName = 'com.company.clienta.ios';
+  static const String appName = 'Client A App';
+  static const String version = '1.0.0+1';
+  static const String logo = 'assets/images/logo.png';
+  static const String launcherIcon = 'assets/images/icon.png';
+  static const String splashScreen = 'assets/images/splash.png';
 }
 ```
+
+Generated code uses [Dart 3.13 primary constructors](https://dart.dev/language/primary-constructors).
+Set your Flutter app's `environment.sdk` lower bound to at least `3.13.0`.
+Strings use single quotes with escaped apostrophes, interpolation, backslashes,
+and control characters. Use `CloneConfigs.androidPackageName` and
+`CloneConfigs.iosPackageName` in place of the former shared `packageName` field.
 
 Use in your Flutter app:
 ```dart
 import 'package:your_app/generated/clone_configs.dart';
 
-// Access configuration
-final baseUrl = CloneConfigs.baseUrl;
 final clientId = CloneConfigs.clientId;
-final primaryColor = CloneConfigs.primaryBlue;
-
-// Access custom fields
-final socketUrl = CloneConfigs.socketUrl;
-final maxRetries = CloneConfigs.maxRetries;
-final isDebugEnabled = CloneConfigs.enableDebug;
+final androidPackage = CloneConfigs.androidPackageName;
+final iosBundleId = CloneConfigs.iosPackageName;
 ```
+
 
 ## Workflow Example
 
@@ -505,7 +515,7 @@ clonify list
 ### Firebase Integration
 
 Firebase is **optional**. Enable `firebase.enabled`, set `settings_file` to your
-`firebase.json`, and set each clone's `firebaseProjectId` and `packageName`.
+`firebase.json`, and set each clone's `firebase_project_id`, `android_package_name`, and `ios_package_name`.
 
 #### One-time setup without Gmail switching
 
@@ -520,8 +530,8 @@ Keep the private service-account JSON **outside the Flutter project and Git**.
 For example, save it on the Desktop and put its normal path in each profile:
 
 ```json
-"firebaseProjectId": "amada-6c209",
-"firebaseServiceAccount": "~/Desktop/amada-firebase.json"
+"firebase_project_id": "amada-6c209",
+"firebase_service_account": "~/Desktop/amada-firebase.json"
 ```
 
 No shell export is needed. Different profiles can use different JSON files and
@@ -668,7 +678,7 @@ dart compile exe bin/clonify.dart
 
 ## Requirements
 
-- Dart SDK ^3.8.1
+- Dart SDK ^3.13.0
 - Flutter SDK (for building apps)
 - Firebase CLI (optional, if using Firebase features)
 - Fastlane (optional, if using upload features)

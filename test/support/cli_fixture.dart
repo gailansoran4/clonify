@@ -39,7 +39,7 @@ class CliFixture {
 name: fixture_app
 version: 1.0.0+1
 environment:
-  sdk: ^3.8.1
+  sdk: ^3.13.0
 dependencies:
   flutter:
     sdk: flutter

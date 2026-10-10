@@ -349,9 +349,8 @@ android {
 
     test('throws when the keystore is empty', () async {
       writeCloneSigningFiles();
-      File(
-        'clonify/clones/client_a/android/upload-keystore.jks',
-      ).writeAsBytesSync(const []);
+      File('clonify/clones/client_a/android/upload-keystore.jks')
+          .writeAsBytesSync(const []);
       expect(
         () => applyAndroidReleaseSigning('client_a', {}),
         throwsA(
@@ -366,9 +365,8 @@ android {
 
     test('throws when the keystore is not JKS or PKCS#12', () async {
       writeCloneSigningFiles();
-      File(
-        'clonify/clones/client_a/android/upload-keystore.jks',
-      ).writeAsStringSync('not-a-keystore');
+      File('clonify/clones/client_a/android/upload-keystore.jks')
+          .writeAsStringSync('not-a-keystore');
       expect(
         () => applyAndroidReleaseSigning('client_a', {}),
         throwsA(
@@ -383,9 +381,8 @@ android {
 
     test('copies a custom keystore filename', () async {
       Directory('clonify/clones/client_a/android').createSync(recursive: true);
-      File(
-        'clonify/clones/client_a/android/staff.keystore',
-      ).writeAsBytesSync(fakeJksBytes());
+      File('clonify/clones/client_a/android/staff.keystore')
+          .writeAsBytesSync(fakeJksBytes());
       File('clonify/clones/client_a/android/key.properties').writeAsStringSync(
         'storePassword=s\nkeyPassword=k\nkeyAlias=upload\nstoreFile=old.jks\n',
       );
@@ -404,9 +401,8 @@ android {
 
     test('accepts a PKCS#12 keystore', () async {
       Directory('clonify/clones/client_a/android').createSync(recursive: true);
-      File(
-        'clonify/clones/client_a/android/upload-keystore.jks',
-      ).writeAsBytesSync(const [0x30, 0x82, 0x01, 0x00]);
+      File('clonify/clones/client_a/android/upload-keystore.jks')
+          .writeAsBytesSync(const [0x30, 0x82, 0x01, 0x00]);
       File('clonify/clones/client_a/android/key.properties').writeAsStringSync(
         'storePassword=s\nkeyPassword=k\nkeyAlias=upload\nstoreFile=upload-keystore.jks\n',
       );
@@ -418,8 +414,7 @@ android {
 
     test('keeps extra key.properties entries', () async {
       writeCloneSigningFiles(
-        properties:
-            'storePassword=s\nkeyPassword=k\nkeyAlias=upload\nstoreFile=old.jks\nextra=keep\n',
+        properties: 'storePassword=s\nkeyPassword=k\nkeyAlias=upload\nstoreFile=old.jks\nextra=keep\n',
       );
       writeKotlinGradleWithDebugReleaseSigning();
       await applyAndroidReleaseSigning('client_a', {});
@@ -487,8 +482,7 @@ android {
 
     test('throws when a required key.properties value is blank', () async {
       writeCloneSigningFiles(
-        properties:
-            'storePassword=   \nkeyPassword=k\nkeyAlias=upload\nstoreFile=upload-keystore.jks\n',
+        properties: 'storePassword=   \nkeyPassword=k\nkeyAlias=upload\nstoreFile=upload-keystore.jks\n',
       );
       expect(
         () => applyAndroidReleaseSigning('client_a', {}),
@@ -504,9 +498,8 @@ android {
 
     test('copies a custom key.properties file name', () async {
       Directory('clonify/clones/client_a/android').createSync(recursive: true);
-      File(
-        'clonify/clones/client_a/android/upload-keystore.jks',
-      ).writeAsBytesSync(fakeJksBytes());
+      File('clonify/clones/client_a/android/upload-keystore.jks')
+          .writeAsBytesSync(fakeJksBytes());
       File('clonify/clones/client_a/android/play.properties').writeAsStringSync(
         'storePassword=s\nkeyPassword=k\nkeyAlias=upload\nstoreFile=old.jks\n',
       );
@@ -606,14 +599,12 @@ android {
 
     test('does not overwrite an existing example file', () {
       Directory('clonify/clones/client_a/android').createSync(recursive: true);
-      File(
-        'clonify/clones/client_a/android/key.properties.example',
-      ).writeAsStringSync('KEEP');
+      File('clonify/clones/client_a/android/key.properties.example')
+          .writeAsStringSync('KEEP');
       createCloneAndroidSigningDirectory('client_a');
       expect(
-        File(
-          'clonify/clones/client_a/android/key.properties.example',
-        ).readAsStringSync(),
+        File('clonify/clones/client_a/android/key.properties.example')
+            .readAsStringSync(),
         'KEEP',
       );
     });
@@ -624,9 +615,8 @@ List<int> fakeJksBytes() => [...jksMagicBytes, 0x00, 0x01, 0x02];
 
 void writeCloneSigningFiles({String? properties}) {
   Directory('clonify/clones/client_a/android').createSync(recursive: true);
-  File(
-    'clonify/clones/client_a/android/upload-keystore.jks',
-  ).writeAsBytesSync(fakeJksBytes());
+  File('clonify/clones/client_a/android/upload-keystore.jks')
+      .writeAsBytesSync(fakeJksBytes());
   File('clonify/clones/client_a/android/key.properties').writeAsStringSync(
     properties ??
         '''

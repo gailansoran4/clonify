@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'profile_schema.dart';
+
 import '../custom_exceptions.dart';
 import '../src/clonify_core.dart';
 import 'clonify_helpers.dart';
@@ -59,7 +61,9 @@ Future<void> uploadApps(
       fastfile: fastfile,
       contents: renderFastlaneFile(
         fastlanePath: fastfile,
-        bundleId: config['packageName'] as String,
+        bundleId: platform == 'android'
+            ? androidPackageName(config)
+            : iosPackageName(config),
         appVersion: version.split('+').first,
         appVersionCode: platform == 'android' ? version.split('+').last : null,
         artifact: File(artifact).absolute.path,

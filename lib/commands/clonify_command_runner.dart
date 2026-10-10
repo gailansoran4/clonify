@@ -6,11 +6,16 @@
 library;
 
 import 'dart:async';
+
 import 'diagnostic_commands.dart';
 import '../utils/configuration_preflight.dart';
 import '../utils/project_lock.dart';
 import '../utils/file_tree_checkpoint.dart';
+
 import 'dart:io';
+
+import '../utils/profile_schema.dart';
+
 import 'dart:isolate';
 
 import 'package:args/command_runner.dart';
@@ -172,7 +177,7 @@ abstract class ClonifyBaseCommand extends Command<void> {
   List<String> get aliases => command.aliases;
 }
 
-/// Resolves `--clientId`, falling back to the last used client when needed.
+/// Resolves an explicit ID, the active receipt, or a single available profile.
 ///
 /// - [preferLastWithoutPrompt]: use last client silently (e.g. Shorebird).
 /// - otherwise, when [skipAll] is false, ask before reusing last client.
@@ -186,10 +191,16 @@ Future<String> resolveClientIdOrThrow({
 
   final lastClientId = await getLastClientId();
   if (lastClientId == null || lastClientId.isEmpty) {
-    throw CustomException(missingMessage ?? Messages.clientIdRequired);
+    throw CustomException(
+      '${missingMessage ?? Messages.clientIdRequired} '
+      'Choose a profile with --clientId <id> (or --client-id <id>). '
+      'Run clonify list to see available profiles.',
+    );
   }
 
-  if (preferLastWithoutPrompt || skipAll) return lastClientId;
+  if (preferLastWithoutPrompt || skipAll || !stdin.hasTerminal) {
+    return lastClientId;
+  }
 
   if (!skipAll) {
     final answer = prompt(Messages.useLastClientIdMessage(lastClientId));
@@ -236,8 +247,7 @@ class ConfigureCommand extends ClientIdCommand {
     argParser.addFlag(
       'dry-run',
       negatable: false,
-      help:
-          'Validate locally and show planned steps without changing project files.',
+      help: 'Validate locally and show planned steps without changing project files.',
     );
     argParser.addClonifyFlags(const [
       ClonifyCommandFlags.skipAll,
@@ -312,7 +322,8 @@ class ShorebirdCommand extends ClientIdCommand {
     assertToolAvailable('shorebird');
     final configFile = File(Constants.configFilePath(clientId));
     final configJson = readCloneProfile(clientId);
-    final packageName = (configJson['packageName'] as String?)?.trim() ?? '';
+    final packageName = androidPackageName(configJson);
+    final iosPackage = iosPackageName(configJson);
     final shorebirdAppId = resolveShorebirdAppId(configJson);
 
     if (packageName.isEmpty) {
@@ -337,6 +348,7 @@ class ShorebirdCommand extends ClientIdCommand {
         assertBundleIdMatches(
           shorebirdArgs: shorebirdArgs,
           expectedPackageName: packageName,
+          expectedIosPackageName: iosPackage,
         );
         assertShorebirdAppIdMatches(shorebirdAppId);
         logger.i(

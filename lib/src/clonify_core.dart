@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+
 import '../custom_exceptions.dart';
+import '../utils/profile_schema.dart';
 
 import 'package:clonify/constants.dart';
 import 'package:clonify/messages.dart';
@@ -11,20 +13,7 @@ import 'package:clonify/utils/tui_helpers.dart';
 // ignore: depend_on_referenced_packages
 import 'package:yaml/yaml.dart' as yaml;
 
-const lastClientFilePath = './clonify/last_client.txt';
 const lastConfigFilePath = './clonify/last_config.json';
-
-/// Saves the last used client ID to a file.
-///
-/// This function writes the provided [clientId] to the `last_client.txt` file
-/// located in the `./clonify/` directory. This allows the CLI to remember
-/// the last active client for convenience.
-///
-/// Throws a [FileSystemException] if the file cannot be written.
-Future<void> saveLastClientId(String clientId) async {
-  final file = File(lastClientFilePath);
-  await file.writeAsString(clientId);
-}
 
 /// Saves the last used configuration map to a JSON file.
 ///
@@ -406,7 +395,7 @@ bool _createSettingsFile(
     if (customFields.isNotEmpty) {
       customFieldsYaml = '\n${ClonifySettingsKeys.customFields}:\n';
       for (final field in customFields) {
-        customFieldsYaml += '  - name: "${field.name}"\n';
+        customFieldsYaml += '  - name: "${snakeCaseField(field.name)}"\n';
         customFieldsYaml += '    type: "${field.type}"\n';
       }
     }

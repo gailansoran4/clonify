@@ -427,9 +427,8 @@ List<({String relative, Directory hold})> _parkSkippedDirectories(String root) {
       if (child is! Directory) continue;
       final name = p.basename(child.path);
       if (_skipCheckpointDirectory(child.path)) {
-        final hold = Directory(
-          p.dirname(p.absolute(root)),
-        ).createTempSync('.clonify_park_');
+        final hold = Directory(p.dirname(p.absolute(root)))
+            .createTempSync('.clonify_park_');
         final moved = p.join(hold.path, name);
         child.renameSync(moved);
         parked.add((relative: p.relative(child.path, from: root), hold: hold));

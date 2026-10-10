@@ -41,7 +41,7 @@ enum ClonifyCommands {
 /// Shared CLI options.
 enum ClonifyCommandOptions {
   clientId(
-    description: 'Specify the client ID for the command',
+    description: 'Select a profile (alias: --client-id); otherwise use the active or only profile',
     aliases: ['client-id', 'id'],
   );
 
@@ -89,8 +89,8 @@ enum ClonifyCommandFlags {
     description: 'Skip updating pubspec.yaml',
   ),
   skipVersionUpdate(
-    help: 'Skip updating the version in pubspec.yaml',
-    description: 'Skip updating the version in pubspec.yaml',
+    help: 'Keep the profile version and sync pubspec.yaml without a version prompt',
+    description: 'Keep the profile version and sync pubspec.yaml without a version prompt',
   ),
   buildAab(
     help: 'Build the Android App Bundle (AAB) for the project',

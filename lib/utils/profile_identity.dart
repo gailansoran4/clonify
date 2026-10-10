@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'profile_schema.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import '../custom_exceptions.dart';
 import '../src/clonify_core.dart';
 import 'android_signing_manager.dart';
+import 'clone_config_generator.dart';
 import 'clone_configure_validator.dart';
 import 'configuration_preflight.dart';
 import 'firebase_config_cache.dart';
@@ -25,16 +28,12 @@ void assertProfileIdentity(
   bool checkVersion = true,
 }) {
   final settings = getClonifySettings();
-  final package = config['packageName'] as String;
+  final package = androidPackageName(config);
+  final iosPackage = iosPackageName(config);
   void mismatch(String message) => throw CustomException(
     '$message Run clonify configure --clientId $clientId before building or uploading.',
   );
   if (requireSelected) {
-    final selected = File('clonify/last_client.txt');
-    if (!selected.existsSync() ||
-        selected.readAsStringSync().trim() != clientId) {
-      mismatch('The selected profile is not "$clientId".');
-    }
     final configured = File('clonify/active_profile.json');
     if (!configured.existsSync()) {
       mismatch(
@@ -48,6 +47,9 @@ void assertProfileIdentity(
       mismatch('The active profile record is invalid.');
       rethrow;
     }
+    if (receipt is Map && receipt['clientId'] != clientId) {
+      mismatch('The selected profile is not "$clientId".');
+    }
     if (receipt is! Map ||
         receipt['clientId'] != clientId ||
         receipt['profile'] != profileFingerprint(config)) {
@@ -59,15 +61,22 @@ void assertProfileIdentity(
   assertBundleIdMatches(
     shorebirdArgs: [if (android) 'android', if (ios) 'ios'],
     expectedPackageName: package,
+    expectedIosPackageName: iosPackage,
   );
   final generated = File('lib/generated/clone_configs.dart');
   if (!generated.existsSync()) {
     mismatch('Generated clone configuration is missing.');
   }
   final content = generated.readAsStringSync();
-  for (final field in ['clientId', 'packageName', 'appName', 'version']) {
+  for (final field in [
+    'clientId',
+    'androidPackageName',
+    'iosPackageName',
+    'appName',
+    'version',
+  ]) {
     final value = config[field]?.toString() ?? '';
-    final encoded = jsonEncode(value).replaceAll(r'$', r'\$');
+    final encoded = dartString(value);
     if (!content.contains('static const String $field = $encoded;')) {
       mismatch('Generated $field does not match profile "$clientId".');
     }
@@ -75,16 +84,21 @@ void assertProfileIdentity(
   if (checkVersion && readProjectPubspec()['version'] != config['version']) {
     mismatch('pubspec.yaml version does not match profile "$clientId".');
   }
-  if (checkFirebase && settings.firebaseEnabled) {
+  if (checkFirebase &&
+      settings.firebaseEnabled &&
+      trimmedConfigString(config['firebaseProjectId']) != null) {
     final project = trimmedConfigString(config['firebaseProjectId']);
     if (project == null) mismatch('The profile is missing firebaseProjectId.');
     assertFirebaseConfiguration(
       project!,
       package,
+      iosPackageName: iosPackage,
       firebaseSettingsFilePath: settings.firebaseSettingsFilePath,
     );
   }
-  if (checkShorebird && settings.shorebirdEnabled) {
+  if (checkShorebird &&
+      settings.shorebirdEnabled &&
+      trimmedConfigString(config['shorebirdAppId']) != null) {
     final appId = resolveShorebirdAppId(config);
     if (appId.isEmpty) mismatch('The profile is missing shorebirdAppId.');
     assertShorebirdAppIdMatches(appId);
@@ -155,7 +169,7 @@ String profileFingerprint(Map<String, dynamic> config) {
   }
 
   // Credential location is local tooling metadata, never part of an app build.
-  final publicConfig = Map<String, dynamic>.of(config)
+  final publicConfig = normalizeProfile(config)
     ..remove('firebaseServiceAccount');
   return sha256
       .convert(utf8.encode(jsonEncode(canonical(publicConfig))))

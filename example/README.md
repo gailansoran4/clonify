@@ -435,7 +435,7 @@ clonify build --help
 your-flutter-project/
 ├── clonify/
 │   ├── clonify_settings.yaml
-│   ├── last_client.txt
+│   ├── active_profile.json
 │   ├── last_config.json
 │   └── clones/
 │       ├── client-a/

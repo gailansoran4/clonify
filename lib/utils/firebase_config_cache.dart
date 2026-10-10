@@ -15,12 +15,14 @@ const firebaseApplicationConfigPaths = <String>[
 void assertFirebaseConfiguration(
   String projectId,
   String packageName, {
+  String? iosPackageName,
   String directory = '.',
   String firebaseSettingsFilePath = 'firebase.json',
 }) {
   readFirebaseConfiguration(
     projectId,
     packageName,
+    iosPackageName: iosPackageName,
     directory: directory,
     firebaseSettingsFilePath: firebaseSettingsFilePath,
   );
@@ -66,6 +68,7 @@ bool restoreFirebaseConfiguration({
   required String clientId,
   required String firebaseProjectId,
   required String packageName,
+  String? iosPackageName,
   String directory = '.',
   String firebaseSettingsFilePath = 'firebase.json',
   String clonesDirectory = 'clonify/clones',
@@ -86,6 +89,7 @@ bool restoreFirebaseConfiguration({
     configuration = readFirebaseConfiguration(
       firebaseProjectId,
       packageName,
+      iosPackageName: iosPackageName,
       directory: cache.path,
     );
     final cachedMetadata = firebaseJsonObject(
@@ -135,6 +139,7 @@ void saveFirebaseConfiguration({
   required String clientId,
   required String firebaseProjectId,
   required String packageName,
+  String? iosPackageName,
   String directory = '.',
   String firebaseSettingsFilePath = 'firebase.json',
   String clonesDirectory = 'clonify/clones',
@@ -142,6 +147,7 @@ void saveFirebaseConfiguration({
   final (:contents, :flutter) = readFirebaseConfiguration(
     firebaseProjectId,
     packageName,
+    iosPackageName: iosPackageName,
     directory: directory,
     firebaseSettingsFilePath: firebaseSettingsFilePath,
   );
@@ -249,6 +255,7 @@ void assertFirebaseCacheFiles(Directory cache) {
 readFirebaseConfiguration(
   String projectId,
   String packageName, {
+  String? iosPackageName,
   String directory = '.',
   String firebaseSettingsFilePath = 'firebase.json',
 }) {
@@ -315,7 +322,11 @@ readFirebaseConfiguration(
     contents['ios/Runner/GoogleService-Info.plist']!,
   );
   assertFirebaseSetting(ios['PROJECT_ID'], projectId, 'iOS project');
-  assertFirebaseSetting(ios['BUNDLE_ID'], packageName, 'iOS bundle ID');
+  assertFirebaseSetting(
+    ios['BUNDLE_ID'],
+    iosPackageName ?? packageName,
+    'iOS bundle ID',
+  );
   assertFirebaseSetting(ios['GCM_SENDER_ID'], sender, 'iOS sender ID');
   assertFirebaseAppId(ios['GOOGLE_APP_ID'], 'ios', sender);
 
@@ -341,7 +352,7 @@ readFirebaseConfiguration(
   }
   assertFirebaseSetting(
     options['ios']!['iosBundleId'],
-    packageName,
+    iosPackageName ?? packageName,
     'Dart iOS bundle ID',
   );
   assertFirebaseSetting(
@@ -550,9 +561,8 @@ String decodeFirebaseXmlString(String value) {
       '&apos;': "'",
     };
     if (simple.containsKey(entity)) return simple[entity]!;
-    final number = RegExp(
-      r'^&#(x[0-9a-fA-F]+|[0-9]+);$',
-    ).firstMatch(entity)?[1];
+    final number = RegExp(r'^&#(x[0-9a-fA-F]+|[0-9]+);$')
+        .firstMatch(entity)?[1];
     if (number != null) {
       final code = number.startsWith('x')
           ? int.parse(number.substring(1), radix: 16)

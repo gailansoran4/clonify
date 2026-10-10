@@ -9,8 +9,7 @@ void main() {
 
   group('ClonifySettings.fromYaml', () {
     test('parses minimal valid settings', () {
-      final yaml =
-          loadYaml('''
+      final yaml = loadYaml('''
 firebase:
   enabled: false
   settings_file: ""
@@ -19,8 +18,7 @@ fastlane:
   settings_file: ""
 company_name: "Acme"
 default_color: "#FFFFFF"
-''')
-              as YamlMap;
+''') as YamlMap;
 
       final settings = ClonifySettings.fromYaml(yaml);
       expect(settings.companyName, 'Acme');
@@ -30,8 +28,7 @@ default_color: "#FFFFFF"
     });
 
     test('parses shorebird enabled flag when present', () {
-      final yaml =
-          loadYaml('''
+      final yaml = loadYaml('''
 firebase:
   enabled: true
   settings_file: "./firebase.json"
@@ -42,8 +39,7 @@ shorebird:
   enabled: true
 company_name: "Acme"
 default_color: "#112233"
-''')
-              as YamlMap;
+''') as YamlMap;
 
       final settings = ClonifySettings.fromYaml(yaml);
       expect(settings.firebaseEnabled, isTrue);
@@ -52,8 +48,7 @@ default_color: "#112233"
     });
 
     test('defaults shorebird to disabled when missing', () {
-      final yaml =
-          loadYaml('''
+      final yaml = loadYaml('''
 firebase:
   enabled: false
   settings_file: ""
@@ -62,8 +57,7 @@ fastlane:
   settings_file: ""
 company_name: "Acme"
 default_color: "#FFFFFF"
-''')
-              as YamlMap;
+''') as YamlMap;
 
       final settings = ClonifySettings.fromYaml(yaml);
       expect(settings.shorebirdEnabled, isFalse);

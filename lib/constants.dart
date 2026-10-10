@@ -183,7 +183,7 @@ public class MainActivity extends FlutterActivity {
 
   /// Fallback package version when pubspec cannot be resolved at runtime.
   /// Prefer `--version`, which reads pubspec.yaml dynamically.
-  static const String packageVersion = '0.5.0';
+  static const String packageVersion = '0.6.0';
 
   /// The current version of the Clonify CLI tool.
   @Deprecated('Use Constants.packageVersion or --version flag')

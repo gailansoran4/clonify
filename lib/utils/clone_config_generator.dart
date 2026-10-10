@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import 'profile_schema.dart';
+
 import 'dart:io';
 
 import '../custom_exceptions.dart';
@@ -8,10 +11,29 @@ import '../src/clonify_core.dart';
 import 'notification_icon_manager.dart';
 
 /// Escapes data as a Dart string literal, including interpolation characters.
-String dartString(String value) => jsonEncode(value).replaceAll(r'$', r'\$');
+String dartString(String value) {
+  final escaped = jsonEncode(value);
+  return "'${escaped.substring(1, escaped.length - 1).replaceAll(r'\"', '"').replaceAll("'", r"\'").replaceAll(r'$', r'\$')}'";
+}
 
 /// Generates app-visible values only. Credential references never enter Dart.
 Future<void> generateCloneConfigFile(CloneConfigModel model) async {
+  for (final entry in {
+    'client_id': model.clientId,
+    'android_package_name': model.androidPackageName,
+    'ios_package_name': model.iosPackageName,
+    'app_name': model.appName,
+    'version': model.version,
+    'logo': model.logo,
+    'launcher_icon': model.launcherIcon,
+    'splash_screen': model.splashScreen,
+  }.entries) {
+    if (entry.value == null || entry.value!.trim().isEmpty) {
+      throw CustomException(
+        'Cannot generate config: ${entry.key} is required.',
+      );
+    }
+  }
   final color = notificationColorArgbLiteral(
     (model.backgroundNotificationColor?.isNotEmpty ?? false)
         ? model.backgroundNotificationColor!
@@ -23,20 +45,22 @@ Future<void> generateCloneConfigFile(CloneConfigModel model) async {
   if ((model.colors?.isNotEmpty ?? false) || color != null) {
     output.writeln("import 'dart:ui';\n");
   }
-  output.writeln('abstract class CloneConfigs {');
+  output.writeln('abstract class CloneConfigs() {');
   final fields = <String, String>{
-    'baseUrl': '${model.baseUrl}',
-    'packageName': '${model.packageName}',
+    if (model.baseUrl != null) 'baseUrl': model.baseUrl!,
+    'androidPackageName': model.androidPackageName ?? '',
+    'iosPackageName': model.iosPackageName ?? '',
     'appName': '${model.appName}',
     'logo': 'assets/images/${model.logo}',
     'launcherIcon': 'assets/images/${model.launcherIcon}',
     'splashScreen': 'assets/images/${model.splashScreen}',
-    'firebaseProjectId': '${model.firebaseProjectId}',
+    if (model.firebaseProjectId?.isNotEmpty ?? false)
+      'firebaseProjectId': model.firebaseProjectId!,
     if (model.shorebirdAppId?.isNotEmpty ?? false)
       'shorebirdAppId': model.shorebirdAppId!,
     'clientId': '${model.clientId}',
     'version': model.version,
-    'primaryColor': '${model.primaryColor}',
+    if (model.primaryColor != null) 'primaryColor': model.primaryColor!,
   };
   final names = {...fields.keys, 'backgroundNotificationColor'};
   for (final entry in fields.entries) {
@@ -53,29 +77,28 @@ Future<void> generateCloneConfigFile(CloneConfigModel model) async {
     if (item.name == null || item.color == null) {
       throw CustomException('Every color needs name and color.');
     }
-    assertGeneratedFieldName(item.name!, names);
+    final name = camelCaseField(item.name!);
+    assertGeneratedFieldName(name, names);
     if (!RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(item.color!)) {
       throw CustomException('Color ${item.name} must contain six hex digits.');
     }
-    output.writeln('  static const ${item.name} = Color(0xFF${item.color});');
+    output.writeln('  static const $name = Color(0xFF${item.color});');
   }
   final settings = getClonifySettings();
   if (settings.customFields.isNotEmpty) {
-    final config =
-        jsonDecode(
-              File(
-                'clonify/clones/${model.clientId}/config.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
+    final config = jsonDecode(
+      File('clonify/clones/${model.clientId}/config.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
+    final normalized = normalizeProfile(config);
     for (final field in settings.customFields) {
-      assertGeneratedFieldName(field.name, names);
-      if (field.name == 'firebaseServiceAccount') {
+      final name = camelCaseField(field.name);
+      assertGeneratedFieldName(name, names);
+      if (name == 'firebaseServiceAccount') {
         throw CustomException(
           'firebaseServiceAccount cannot be an app custom field.',
         );
       }
-      final value = config[field.name];
+      final value = normalized[name];
       if (value == null) continue;
       final valid = switch (field.type) {
         'int' => value is int,
@@ -95,7 +118,7 @@ Future<void> generateCloneConfigFile(CloneConfigModel model) async {
           : field.type == 'double'
           ? (value as num).toDouble().toString()
           : '$value';
-      output.writeln('  static const $type ${field.name} = $literal;');
+      output.writeln('  static const $type $name = $literal;');
     }
   }
   output.writeln('}');
@@ -106,6 +129,11 @@ Future<void> generateCloneConfigFile(CloneConfigModel model) async {
 
 void assertGeneratedFieldName(String name, Set<String> names) {
   const reserved = {
+    'CloneConfigs',
+    'hashCode',
+    'runtimeType',
+    'toString',
+    'noSuchMethod',
     'class',
     'const',
     'static',

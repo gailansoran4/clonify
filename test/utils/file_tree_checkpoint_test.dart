@@ -35,9 +35,8 @@ void main() {
 
       final checkpoint = FileTreeCheckpoint.capture(const ['ios', 'android']);
       File('ios/Runner/Info.plist').writeAsStringSync('NEW_IOS');
-      File(
-        'android/app/src/main/AndroidManifest.xml',
-      ).writeAsStringSync('NEW_ANDROID');
+      File('android/app/src/main/AndroidManifest.xml')
+          .writeAsStringSync('NEW_ANDROID');
       checkpoint.restore();
 
       expect(File('ios/Runner/Info.plist').readAsStringSync(), 'OLD_IOS');
@@ -108,15 +107,13 @@ void main() {
         ..writeAsStringSync('OLD');
       final checkpoint = FileTreeCheckpoint.capture(const ['ios']);
       File('ios/Runner/Info.plist').writeAsStringSync('NEW');
-      File(
-        'ios/Flutter/ephemeral/Packages/.packages/marker.txt',
-      ).writeAsStringSync('CHANGED');
+      File('ios/Flutter/ephemeral/Packages/.packages/marker.txt')
+          .writeAsStringSync('CHANGED');
       checkpoint.restore();
       expect(File('ios/Runner/Info.plist').readAsStringSync(), 'OLD');
       expect(
-        File(
-          'ios/Flutter/ephemeral/Packages/.packages/marker.txt',
-        ).readAsStringSync(),
+        File('ios/Flutter/ephemeral/Packages/.packages/marker.txt')
+            .readAsStringSync(),
         'CHANGED',
       );
     });
@@ -181,9 +178,8 @@ void main() {
         ..createSync(recursive: true)
         ..writeAsStringSync('');
       File('ios/Runner/empty.bin').writeAsBytesSync(const []);
-      File(
-        'ios/Runner/key.jks',
-      ).writeAsBytesSync(const [0xFE, 0xED, 0xFE, 0xED]);
+      File('ios/Runner/key.jks')
+          .writeAsBytesSync(const [0xFE, 0xED, 0xFE, 0xED]);
       final checkpoint = FileTreeCheckpoint.capture(const ['ios']);
       File('ios/Runner/café.txt').writeAsStringSync('changed');
       File('ios/Runner/key.jks').writeAsBytesSync(const [0x00]);
@@ -288,9 +284,8 @@ void main() {
       await expectLater(
         runConfigureTransaction(() async {
           File('ios/Runner/Info.plist').writeAsStringSync('NEW_IOS');
-          File(
-            'android/app/src/main/AndroidManifest.xml',
-          ).writeAsStringSync('NEW_ANDROID');
+          File('android/app/src/main/AndroidManifest.xml')
+              .writeAsStringSync('NEW_ANDROID');
           throw CustomException('Android signing failed');
         }),
         throwsA(
@@ -309,41 +304,38 @@ void main() {
       );
     });
 
-    test(
-      'restores custom Firebase metadata alongside default roots on failure',
-      () async {
-        final customSettings = File('settings/custom-firebase.json')
-          ..createSync(recursive: true)
-          ..writeAsStringSync(
-            '{"hosting":{"public":"old-hosting"},"flutter":{"project":"old"}}\n',
-          );
-        final originalSettings = customSettings.readAsBytesSync();
-        File('lib/firebase_options.dart')
-          ..createSync(recursive: true)
-          ..writeAsStringSync('OLD_FIREBASE');
+    test('restores custom Firebase metadata alongside default roots on failure', () async {
+      final customSettings = File('settings/custom-firebase.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync(
+          '{"hosting":{"public":"old-hosting"},"flutter":{"project":"old"}}\n',
+        );
+      final originalSettings = customSettings.readAsBytesSync();
+      File('lib/firebase_options.dart')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('OLD_FIREBASE');
 
-        await expectLater(
-          runConfigureTransaction(() async {
-            customSettings.writeAsStringSync('{"flutter":{"project":"new"}}');
-            File('lib/firebase_options.dart').writeAsStringSync('NEW_FIREBASE');
-            throw CustomException('failed after updating custom metadata');
-          }, roots: {...configureMutableRoots, customSettings.path}),
-          throwsA(
-            isA<ConfigureRolledBackException>().having(
-              (error) => error.restoreError,
-              'restoreError',
-              isNull,
-            ),
+      await expectLater(
+        runConfigureTransaction(() async {
+          customSettings.writeAsStringSync('{"flutter":{"project":"new"}}');
+          File('lib/firebase_options.dart').writeAsStringSync('NEW_FIREBASE');
+          throw CustomException('failed after updating custom metadata');
+        }, roots: {...configureMutableRoots, customSettings.path}),
+        throwsA(
+          isA<ConfigureRolledBackException>().having(
+            (error) => error.restoreError,
+            'restoreError',
+            isNull,
           ),
-        );
+        ),
+      );
 
-        expect(customSettings.readAsBytesSync(), originalSettings);
-        expect(
-          File('lib/firebase_options.dart').readAsStringSync(),
-          'OLD_FIREBASE',
-        );
-      },
-    );
+      expect(customSettings.readAsBytesSync(), originalSettings);
+      expect(
+        File('lib/firebase_options.dart').readAsStringSync(),
+        'OLD_FIREBASE',
+      );
+    });
 
     test(
       'removes custom Firebase metadata created by a failed transaction',
@@ -411,16 +403,13 @@ void main() {
             File('pubspec.yaml').writeAsStringSync('version: 9.0.0+9');
             File('shorebird.yaml').writeAsStringSync('app_id: new-shorebird');
             File('lib/firebase_options.dart').writeAsStringSync('NEW_FIREBASE');
-            File(
-              '.firebaserc',
-            ).writeAsStringSync('{"projects":{"default":"new"}}');
-            File(
-              'clonify/clones/client/config.json',
-            ).writeAsStringSync('{"version":"9.0.0+9"}');
+            File('.firebaserc')
+                .writeAsStringSync('{"projects":{"default":"new"}}');
+            File('clonify/clones/client/config.json')
+                .writeAsStringSync('{"version":"9.0.0+9"}');
             File('ios/Runner/Info.plist').writeAsStringSync('NEW_IOS');
-            File(
-              'android/app/src/main/AndroidManifest.xml',
-            ).writeAsStringSync('NEW_ANDROID');
+            File('android/app/src/main/AndroidManifest.xml')
+                .writeAsStringSync('NEW_ANDROID');
             throw CustomException('configure failed after all writes');
           }),
           throwsA(isA<ConfigureRolledBackException>()),
@@ -471,9 +460,8 @@ void main() {
     test('deletes files that did not exist before configure', () async {
       await expectLater(
         runConfigureTransaction(() async {
-          File(
-            '.firebaserc',
-          ).writeAsStringSync('{"projects":{"default":"new"}}');
+          File('.firebaserc')
+              .writeAsStringSync('{"projects":{"default":"new"}}');
           File('shorebird.yaml').writeAsStringSync('app_id: new');
           File('clonify/clones/client/config.json')
             ..createSync(recursive: true)

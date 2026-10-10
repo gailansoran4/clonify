@@ -82,15 +82,12 @@ class MyApp extends StatelessWidget {
 
     // Create mock assets
     final mockImageData = [137, 80, 78, 71, 13, 10, 26, 10]; // PNG header
-    File(
-      '${projectDir.path}/assets/images/icon.png',
-    ).writeAsBytesSync(mockImageData);
-    File(
-      '${projectDir.path}/assets/images/splash.png',
-    ).writeAsBytesSync(mockImageData);
-    File(
-      '${projectDir.path}/assets/images/logo.png',
-    ).writeAsBytesSync(mockImageData);
+    File('${projectDir.path}/assets/images/icon.png')
+        .writeAsBytesSync(mockImageData);
+    File('${projectDir.path}/assets/images/splash.png')
+        .writeAsBytesSync(mockImageData);
+    File('${projectDir.path}/assets/images/logo.png')
+        .writeAsBytesSync(mockImageData);
   }
 
   /// Creates mock clonify settings file
@@ -124,9 +121,8 @@ launcher_icon_asset: "icon.png"
 splash_screen_asset: "splash.png"
 ''';
 
-    File(
-      '${projectDir.path}/clonify/clonify_settings.yaml',
-    ).writeAsStringSync(settingsContent);
+    File('${projectDir.path}/clonify/clonify_settings.yaml')
+        .writeAsStringSync(settingsContent);
   }
 
   /// Creates mock clone configuration
@@ -171,9 +167,8 @@ splash_screen_asset: "splash.png"
       ],
     };
 
-    File(
-      '${cloneDir.path}/config.json',
-    ).writeAsStringSync(jsonEncode(configContent));
+    File('${cloneDir.path}/config.json')
+        .writeAsStringSync(jsonEncode(configContent));
   }
 
   /// Creates mock build artifacts
@@ -198,9 +193,8 @@ splash_screen_asset: "splash.png"
       'projects': {'default': 'test-firebase-project'},
     };
 
-    File(
-      '${projectDir.path}/firebase.json',
-    ).writeAsStringSync(jsonEncode(firebaseContent));
+    File('${projectDir.path}/firebase.json')
+        .writeAsStringSync(jsonEncode(firebaseContent));
   }
 
   /// Creates mock package_rename_config.yaml
@@ -215,9 +209,8 @@ package_rename_config:
     bundle_name: "com.test.app"
 ''';
 
-    File(
-      '${projectDir.path}/package_rename_config.yaml',
-    ).writeAsStringSync(renameContent);
+    File('${projectDir.path}/package_rename_config.yaml')
+        .writeAsStringSync(renameContent);
   }
 
   /// Creates flutter_launcher_icons.yaml
@@ -229,9 +222,8 @@ flutter_launcher_icons:
   image_path: "assets/images/icon.png"
 ''';
 
-    File(
-      '${projectDir.path}/flutter_launcher_icons.yaml',
-    ).writeAsStringSync(content);
+    File('${projectDir.path}/flutter_launcher_icons.yaml')
+        .writeAsStringSync(content);
   }
 
   /// Creates flutter_native_splash.yaml
@@ -242,9 +234,8 @@ flutter_native_splash:
   image: "assets/images/splash.png"
 ''';
 
-    File(
-      '${projectDir.path}/flutter_native_splash.yaml',
-    ).writeAsStringSync(content);
+    File('${projectDir.path}/flutter_native_splash.yaml')
+        .writeAsStringSync(content);
   }
 }
 

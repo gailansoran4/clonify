@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:path/path.dart' as p;
+
 import '../custom_exceptions.dart';
 
 /// Expresses paths relative to the resolved project root without following
